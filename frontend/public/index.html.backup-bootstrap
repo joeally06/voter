@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Voter Outreach Platform for Obion County - Political campaign mapping and voter data management">
+    <title>Voter Outreach Platform - Obion County</title>
+    
+    <!-- Tailwind CSS (Production Build) -->
+    <link rel="stylesheet" href="/css/output.css">
+    
+    <!-- Bootstrap Icons (Keeping for icon library) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css">
+</head>
+<body>
+    <!-- Skip Links for Accessibility -->
+    <a href="#main-content" class="vp-skip-link">Skip to main content</a>
+    <a href="#searchInput" class="vp-skip-link">Skip to search</a>
+    <a href="#route-tab" class="vp-skip-link">Skip to route planning</a>
+    
+    <div id="app">
+        <!-- Navigation Bar -->
+        <nav class="navbar navbar-dark bg-primary">
+            <div class="container-fluid">
+                <span class="navbar-brand mb-0 h1">
+                    <i class="bi bi-geo-alt-fill"></i>
+                    Voter Outreach Platform
+                </span>
+                <div class="d-flex align-items-center">
+                    <!-- Theme Toggle Button -->
+                    <button class="btn btn-sm btn-light me-2" type="button" 
+                            id="theme-toggle-btn" 
+                            aria-label="Toggle dark mode"
+                            title="Toggle dark mode">
+                        <i class="bi bi-moon-fill" aria-hidden="true"></i>
+                    </button>
+                    
+                    <!-- Mobile Filter Toggle -->
+                    <!-- CRITICAL FIX #3: Added aria-label for accessibility -->
+                    <button class="btn btn-sm btn-light d-md-none me-2" type="button" 
+                            data-bs-toggle="offcanvas" data-bs-target="#filterOffcanvas" 
+                            aria-controls="filterOffcanvas" id="mobileFilterBtn"
+                            aria-label="Open filters panel" aria-expanded="false">
+                        <i class="bi bi-funnel" aria-hidden="true"></i> Filters
+                        <span class="badge bg-danger" id="filterBadgeMobile" style="display: none;">0</span>
+                    </button>
+                    <span class="badge bg-light text-dark me-2">Obion County, TN</span>
+                    <span clwith Keyboard Shortcuts -->
+        <div class="container-fluid mt-3">
+            <nav class="tab-navigation" aria-label="Main navigation">
+                <ul class="nav nav-tabs nav-tabs-modern" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active vp-touch-target" id="route-tab-btn"
+                                data-bs-toggle="tab" data-bs-target="#route-tab"
+                                type="button" role="tab" aria-controls="route-tab" aria-selected="true">
+                            <i class="bi bi-map"></i> Route Planning <kbd class="vp-kbd">1</kbd>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link vp-touch-target" id="analytics-tab-btn"
+                                data-bs-toggle="tab" data-bs-target="#analytics-tab"
+                                type="button" role="tab" aria-controls="analytics-tab" aria-selected="false">
+                            <i class="bi bi-bar-chart-fill"></i> Analytics <kbd class="vp-kbd">2</kbd>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link vp-touch-target" id="voters-tab-btn"
+                                data-bs-toggle="tab" data-bs-target="#voters-tab"
+                                type="button" role="tab" aria-controls="voters-tab" aria-selected="false">
+                            <i class="bi bi-people-fill"></i> Voter List <kbd class="vp-kbd">3</kbd>
+                        </button>
+                    </li>
+                    <li class="nav-item ms-auto" role="presentation">
+                        <button class="nav-link vp-touch-target" id="keyboard-help-btn"
+                                type="button" aria-label="Show keyboard shortcuts" title="Keyboard shortcuts">
+                            <i class="bi bi-keyboard"></i> <kbd class="vp-kbd">?</kbd>
+                        </button>
+                    </li>
+                </ul>
+            </nav>
+
+            <!-- Tab Content -->
+            <div class="tab-content mt-3">
+                <!-- Route Planning Tab -->
+                <div class="tab-pane fade show active" id="route-tab" role="tabpanel" aria-labelledby="route-tab-btn">
+                    <div class="row">
+                <!-- Left Sidebar - Filters and Controls (Desktop) -->
+                <div class="col-md-3 d-none d-md-block">
+                    <!-- Filter Card -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-funnel"></i> Filters</span>
+                            <span class="badge bg-danger" id="filterBadge" style="display: none;">0</span>
+                        </div>
+                        <div class="card-body">
+                            <!-- Search Input -->
+                            <!-- CRITICAL FIX #3: Added aria-describedby for context -->
+                            <div class="mb-3">
+                                <label for="searchInput" class="form-label small fw-bold">Search Voter</label>
+                                <input type="text" class="form-control" id="searchInput" 
+                                       placeholder="Name or address..." 
+                                       aria-describedby="searchHelp"
+                                       aria-label="Search for voter by name or address">
+                                <small id="searchHelp" class="form-text text-muted">Filter voters by name or address</small>
+                            </div>
+                            
+                            <!-- Precinct Filter -->
+                            <!-- CRITICAL FIX #3: Added aria-label -->
+                            <div class="mb-3">
+                                <label for="precinctFilter" class="form-label small fw-bold">Precinct</label>
+                                <select class="form-select" id="precinctFilter" disabled 
+                                        aria-label="Filter voters by precinct number">
+                                    <option value="">All Precincts</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Super Voter Filter -->
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="superVoterFilter">
+                                    <label class="form-check-label small" for="superVoterFilter">
+                                        <i class="bi bi-star-fill text-success"></i> Super Voters Only
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Geocoded Filter -->
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="geocodedFilter">
+                                    <label class="form-check-label small" for="geocodedFilter">
+                                        <i class="bi bi-geo-alt-fill text-info"></i> Geocoded Only
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Party Affiliation Filters -->
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Party Affiliation</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="republicanFilter">
+                                    <label class="form-check-label small" for="republicanFilter">
+                                        <i class="bi bi-circle-fill text-danger"></i> Republican
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="democratFilter">
+                                    <label class="form-check-label small" for="democratFilter">
+                                        <i class="bi bi-circle-fill text-primary"></i> Democrat
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Voting Status Filters -->
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Voting Status</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="regularVotersFilter">
+                                    <label class="form-check-label small" for="regularVotersFilter">
+                                        <i class="bi bi-check-circle-fill text-success"></i> Regular Voters
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="neverVotedFilter">
+                                    <label class="form-check-label small" for="neverVotedFilter">
+                                        <i class="bi bi-x-circle-fill text-warning"></i> Never Voted
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Clear Filters Button -->
+                            <!-- CRITICAL FIX #3: Added aria-label -->
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-sm btn-outline-secondary" id="clearFilters"
+                                        aria-label="Clear all active filters">
+                                    <i class="bi bi-x-circle" aria-hidden="true"></i> Clear Filters
+                                </button>
+                            </div>
+
+                            <!-- Filter Info -->
+                            <!-- CRITICAL FIX #3: Added aria-live for dynamic updates -->
+                            <div class="mt-3 text-center" id="filterInfo" aria-live="polite" aria-atomic="true">
+                                <h3 class="mb-0" id="voterCount">0</h3>
+                                <small class="text-muted">voters found</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Actions Card -->
+                    <div class="card">
+                        <div class="card-header bg-secondary text-white">
+                            <i class="bi bi-lightning-charge" aria-hidden="true"></i> Actions
+                        </div>
+                        <div class="card-body">
+                            <div class="d-grid gap-2">
+                                <!-- Upload Data Button -->
+                                <button class="btn btn-sm btn-outline-success" 
+                                        id="uploadBtn" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#uploadModal"
+                                        aria-label="Upload voter data file">
+                                    <i class="bi bi-cloud-upload" aria-hidden="true"></i> Upload Data
+                                </button>
+                                
+                                <!-- CRITICAL FIX #3: Added aria-label for export button -->
+                                <button class="btn btn-sm btn-outline-primary" id="exportBtn"
+                                        aria-label="Export filtered voters to CSV file">
+                                    <i class="bi bi-download" aria-hidden="true"></i> Export to CSV
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Center Column - Map -->
+                <div class="col-md-6">
+                    <!-- Map Container -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                            <span>
+                                <i class="bi bi-map" aria-hidden="true"></i> Voter Map
+                            </span>
+                            <span class="badge bg-success">Active</span>
+                        </div>
+                        <div class="card-body p-0">
+                            <!-- CRITICAL FIX #3: Added role and aria-label for map -->
+                            <div id="map" style="height: 600px;" 
+                                 role="application" 
+                                 aria-label="Interactive voter location map for Obion County showing geocoded voter addresses"
+                                 tabindex="0">
+                                <!-- Google Maps will initialize here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column - Route Details -->
+                    <div class="col-md-3">
+                        <!-- Route Planning Controls (moved from below) -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-primary text-white">
+                                <i class="bi bi-map"></i> Route Planning
+                            </div>
+                            <div class="card-body">
+                                <!-- Voter Selection Panel -->
+                                <div class="mb-3">
+                                    <h6>Selected Voters (<span id="selectedVotersCount">0</span>)</h6>
+                                    <div class="d-grid gap-2 mb-2">
+                                        <button id="selectFromMapVoters" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-map"></i> Select from Map (Max 50)
+                                        </button>
+                                        <button id="selectFromListVoters" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-list"></i> Select from List
+                                        </button>
+                                        <button id="clearRouteSelection" class="btn btn-sm btn-outline-danger">
+                                            <i class="bi bi-x-circle"></i> Clear Selection
+                                        </button>
+                                    </div>
+                                    <ul id="selectedVotersList" class="list-group" style="max-height: 200px; overflow-y: auto;">
+                                        <li class="list-group-item text-muted text-center small">No voters selected</li>
+                                    </ul>
+                                </div>
+
+                                <!-- Route Options Panel -->
+                                <div class="mb-3">
+                                    <h6>Route Options</h6>
+                                    <div class="mb-2">
+                                        <label for="travelMode" class="form-label small">Travel Mode</label>
+                                        <select id="travelMode" class="form-select form-select-sm">
+                                            <option value="walking" selected>Walking</option>
+                                            <option value="driving">Driving</option>
+                                            <option value="bicycling">Bicycling</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label for="algorithm" class="form-label small">Algorithm</label>
+                                        <select id="algorithm" class="form-select form-select-sm">
+                                            <option value="hybrid" selected>Hybrid (Recommended)</option>
+                                            <option value="nearest_neighbor">Nearest Neighbor</option>
+                                            <option value="2opt">2-Opt</option>
+                                        </select>
+                                    </div>
+                                    <button id="calculateRoute" class="btn btn-primary btn-sm w-100">
+                                        <i class="bi bi-compass"></i> Calculate Route
+                                    </button>
+                                </div>
+
+                                <!-- Route Results Panel -->
+                                <div id="routeResults" style="display: none;">
+                                    <h6>Route Results</h6>
+                                    <div class="alert alert-success p-2 small">
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <strong>Distance:</strong>
+                                            <span id="totalDistance">-</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <strong>Duration:</strong>
+                                            <span id="totalDuration">-</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <strong>Stops:</strong>
+                                            <span id="stopCount">-</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Route Export Options (NEW) -->
+                                    <div id="routeExportOptions" class="mb-2">
+                                        <h6 class="small">Export Route</h6>
+                                        <div class="d-grid gap-1">
+                                            <button class="btn btn-sm btn-outline-primary" id="exportCSV">
+                                                <i class="bi bi-filetype-csv"></i> Export CSV
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-success" id="exportGoogleMaps">
+                                                <i class="bi bi-google"></i> Google Maps
+                                            </button>
+                                        </div>
+                                        <small class="text-muted d-block mt-1">
+                                            <i class="bi bi-info-circle"></i> Includes all waypoints in order
+                                        </small>
+                                    </div>
+                                </div>
+                                <div id="routeEmpty" class="text-muted text-center py-2">
+                                    <i class="bi bi-compass" style="font-size: 1.5rem;"></i>
+                                    <p class="mt-1 small">Calculate a route to see results</p>
+                                </div>
+
+                                <!-- API Quota Widget -->
+                                <div class="card mt-2">
+                                    <div class="card-header bg-light py-1">
+                                        <small class="fw-bold">API Quota Status</small>
+                                    </div>
+                                    <div class="card-body p-2">
+                                        <div class="progress mb-1" style="height: 16px;">
+                                            <div id="quotaBar" class="progress-bar" role="progressbar"
+                                                 style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                                0%
+                                            </div>
+                                        </div>
+                                        <small class="text-muted" style="font-size: 0.7rem;">
+                                            <span id="quotaUsed">0</span> / <span id="quotaTotal">333</span> calls today
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Tab -->
+            <div class="tab-pane fade" id="analytics-tab" role="tabpanel" aria-labelledby="analytics-tab-btn">
+                <div class="row">
+                    <div class="col-md-12">
+                    <!-- Analytics Dashboard -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-secondary text-white">
+                            <i class="bi bi-bar-chart" aria-hidden="true"></i> Analytics Dashboard
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <!-- CRITICAL FIX #3: Added role and aria-label for charts -->
+                                    <div class="chart-container" style="position: relative; height: 300px;">
+                                        <canvas id="precinctChart" 
+                                                role="img" 
+                                                aria-label="Donut chart showing voter distribution across precincts in Obion County"></canvas>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <!-- CRITICAL FIX #3: Added role and aria-label for charts -->
+                                    <div class="chart-container" style="position: relative; height: 300px;">
+                                        <canvas id="superVoterChart" 
+                                                role="img" 
+                                                aria-label="Pie chart comparing super voters to regular voters"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Age Demographics Chart -->
+                            <div class="row">
+                                <div class="col-lg-12 mb-3">
+                                    <div class="chart-container" style="position: relative; height: 350px;">
+                                        <canvas id="ageDemographicsChart" 
+                                                role="img" 
+                                                aria-label="Horizontal bar chart showing voter distribution across age groups, with super voter rates ranging from 5.88% for ages 18-24 to 52.01% for ages 75 and above"
+                                                tabindex="0"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- NEW: Top 3 Analytics Charts -->
+                            <div class="row mt-3">
+                                <!-- Party Affiliation Chart -->
+                                <div class="col-md-4 mb-3">
+                                    <div class="chart-container" style="position: relative; height: 300px;">
+                                        <canvas id="partyAffiliationChart" 
+                                                role="img" 
+                                                aria-label="Doughnut chart showing party affiliation distribution among registered voters"
+                                                tabindex="0"></canvas>
+                                    </div>
+                                </div>
+                                
+                                <!-- Early Voting Trends Chart -->
+                                <div class="col-md-4 mb-3">
+                                    <div class="chart-container" style="position: relative; height: 300px;">
+                                        <canvas id="earlyVotingChart" 
+                                                role="img" 
+                                                aria-label="Stacked bar chart showing early voting trends across elections"
+                                                tabindex="0"></canvas>
+                                    </div>
+                                </div>
+                                
+                                <!-- Turnout by Precinct Chart -->
+                                <div class="col-md-4 mb-3">
+                                    <div class="chart-container" style="position: relative; height: 400px;">
+                                        <canvas id="turnoutByPrecinctChart" 
+                                                role="img" 
+                                                aria-label="Horizontal bar chart showing voter turnout rates by precinct"
+                                                tabindex="0"></canvas>
+                                    </div>
+                                    <!-- Color Legend for Turnout Chart - 5 performance levels -->
+                                    <div class="chart-legend text-small text-muted mt-2 text-center">
+                                        <small>
+                                            Turnout Rate: 
+                                            <span class="fw-bold" style="color: #198754;">■ Excellent ≥70%</span>
+                                            <span class="fw-bold" style="color: #20c997;">■ Good 60-69%</span>
+                                            <span class="fw-bold" style="color: #0dcaf0;">■ Average 50-59%</span>
+                                            <span class="fw-bold" style="color: #ffc107;">■ Below 40-49%</span>
+                                            <span class="fw-bold" style="color: #dc3545;">■ Low &lt;40%</span>
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- CRITICAL FIX #1: Non-Voter Analytics Charts -->
+                            <!-- Added three canvas elements for non-voter analytics features -->
+                            <div class="row mt-3">
+                                <!-- Voter Engagement Levels Chart -->
+                                <div class="col-md-4 mb-3">
+                                    <div class="chart-container" style="position: relative; height: 300px;">
+                                        <canvas id="voterEngagementChart" 
+                                                role="img" 
+                                                aria-label="Doughnut chart showing voter engagement levels: never voted, occasional voters, and super voters"
+                                                tabindex="0"></canvas>
+                                    </div>
+                                </div>
+                                
+                                <!-- Non-Voters by Age Chart -->
+                                <div class="col-md-8 mb-3">
+                                    <div class="chart-container" style="position: relative; height: 350px;">
+                                        <canvas id="nonVoterAgeChart" 
+                                                role="img" 
+                                                aria-label="Dual-axis chart showing non-voter demographics by age group with counts and percentages"
+                                                tabindex="0"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Non-Voters by Precinct Chart -->
+                            <div class="row mt-3">
+                                <div class="col-md-12 mb-3">
+                                    <div class="chart-container" style="position: relative; height: 400px;">
+                                        <canvas id="nonVoterPrecinctChart" 
+                                                role="img" 
+                                                aria-label="Horizontal bar chart showing non-voters by precinct with priority levels"
+                                                tabindex="0"></canvas>
+                                    </div>
+                                    <!-- Color legend for severity levels -->
+                                    <div class="chart-legend text-small text-muted mt-2 text-center">
+                                        <small>
+                                            Priority Level: 
+                                            <span class="fw-bold" style="color: #dc3545;">■ Critical ≥80%</span>
+                                            <span class="fw-bold" style="color: #fd7e14;">■ High 60-79%</span>
+                                            <span class="fw-bold" style="color: #ffc107;">■ Medium 40-59%</span>
+                                            <span class="fw-bold" style="color: #198754;">■ Low &lt;40%</span>
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- CRITICAL FIX #2: Target List Section -->
+                    <!-- Added complete target list section for never-voted voters -->
+                    <div class="card mb-3" id="targetListSection">
+                        <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-people"></i> Never-Voted Voters Target List</span>
+                            <span class="badge bg-light text-dark" id="targetListCount">0 voters</span>
+                        </div>
+                        <div class="card-body">
+                            <!-- Filters Row -->
+                            <div class="row mb-3">
+                                <div class="col-md-2">
+                                    <label for="targetAgeFilter" class="form-label small fw-bold">Age Range</label>
+                                    <select class="form-select form-select-sm" id="targetAgeFilter" aria-label="Filter target list by age range">
+                                        <option value="18-120" selected>All Ages</option>
+                                        <option value="18-24">18-24</option>
+                                        <option value="25-34">25-34</option>
+                                        <option value="35-44">35-44</option>
+                                        <option value="45-54">45-54</option>
+                                        <option value="55-64">55-64</option>
+                                        <option value="65-74">65-74</option>
+                                        <option value="75-120">75+</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label for="targetPrecinctFilter" class="form-label small fw-bold">Precinct</label>
+                                    <select class="form-select form-select-sm" id="targetPrecinctFilter" multiple size="1" aria-label="Filter target list by precinct">
+                                        <option value="">All Precincts</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label for="targetCityFilter" class="form-label small fw-bold">City</label>
+                                    <select class="form-select form-select-sm" id="targetCityFilter" multiple size="1" aria-label="Filter target list by city">
+                                        <option value="">All Cities</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small fw-bold">Filters</label>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="targetGeocodedFilter">
+                                        <label class="form-check-label small" for="targetGeocodedFilter">
+                                            Geocoded Only
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="targetSearchInput" class="form-label small fw-bold">Search</label>
+                                    <input type="text" class="form-control form-control-sm" id="targetSearchInput" 
+                                           placeholder="Name or address..." aria-label="Search target list by name or address">
+                                </div>
+                                <div class="col-md-1">
+                                    <label class="form-label small fw-bold">&nbsp;</label>
+                                    <button class="btn btn-sm btn-success w-100" id="exportTargetListBtn" aria-label="Export target list to CSV">
+                                        <i class="bi bi-download"></i> CSV
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Results Table -->
+                            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                                <table class="table table-sm table-hover table-striped mb-0">
+                                    <thead class="sticky-top bg-light">
+                                        <tr>
+                                            <th scope="col" class="sortable" data-sort="lastName">Name <i class="bi bi-arrow-down-up"></i></th>
+                                            <th scope="col" class="sortable" data-sort="age">Age <i class="bi bi-arrow-down-up"></i></th>
+                                            <th scope="col">Address</th>
+                                            <th scope="col" class="sortable" data-sort="city">City <i class="bi bi-arrow-down-up"></i></th>
+                                            <th scope="col" class="sortable" data-sort="precinct">Precinct <i class="bi bi-arrow-down-up"></i></th>
+                                            <th scope="col">Zip</th>
+                                            <th scope="col" class="text-center">Geocoded</th>
+                                            <th scope="col">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="targetTableBody">
+                                        <tr>
+                                            <td colspan="8" class="text-center text-muted py-4">
+                                                <div class="spinner-border spinner-border-sm" role="status">
+                                                    <span class="visually-hidden">Loading...</span>
+                                                </div>
+                                                <p class="mt-2">Loading target list...</p>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Pagination -->
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <small class="text-muted">
+                                        Showing <span id="showingStart">0</span> to <span id="showingEnd">0</span> 
+                                        of <span id="showingTotal">0</span> voters
+                                    </small>
+                                </div>
+                                <div class="col-md-6">
+                                    <nav aria-label="Target list pagination">
+                                        <ul class="pagination pagination-sm justify-content-end mb-0" id="targetListPagination">
+                                            <li class="page-item disabled">
+                                                <a class="page-link" href="#" aria-label="Previous page">Previous</a>
+                                            </li>
+                                            <li class="page-item disabled">
+                                                <a class="page-link" href="#" aria-label="Next page">Next</a>
+                                            </li>
+                                        </ul>
+                                    </nav>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Voter List Tab -->
+            <div class="tab-pane fade" id="voters-tab" role="tabpanel" aria-labelledby="voters-tab-btn">
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="card mb-3">
+                            <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                                <span>
+                                    <i class="bi bi-people-fill" aria-hidden="true"></i> Voter List
+                                </span>
+                                <div class="d-flex gap-2">
+                                    <span class="badge bg-primary" id="voterSelectionCount" style="display: none;">0 selected</span>
+                                    <span class="badge bg-light text-dark" id="voterListCount">0 voters</span>
+                                </div>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                                    <table class="table table-hover table-striped mb-0" id="voterTable">
+                                        <thead class="sticky-top bg-light">
+                                            <tr>
+                                                <th scope="col" data-sortable="true" data-column="lastName">Name</th>
+                                                <th scope="col" data-sortable="true" data-column="address">Address</th>
+                                                <th scope="col" data-sortable="true" data-column="mostRecentParty">Party</th>
+                                                <th scope="col" data-sortable="true" data-column="precinctNumber">Precinct</th>
+                                                <th scope="col" data-sortable="true" data-column="superVoter">Status</th>
+                                                <th scope="col" data-sortable="true" data-column="participationRate">Participation</th>
+                                                <th scope="col">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="voterTableBody">
+                                            <tr>
+                                                <td colspan="7" class="text-center text-muted py-5">
+                                                    <div class="spinner-border spinner-border-sm" role="status">
+                                                        <span class="visually-hidden">Loading...</span>
+                                                    </div>
+                                                    <p class="mt-2">Loading voters...</p>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Voter List Pagination -->
+                            <div class="card-footer bg-light">
+                                <div class="row align-items-center">
+                                    <div class="col-md-4 col-sm-12 mb-2 mb-md-0">
+                                        <small class="text-muted">
+                                            Showing <span id="voterShowingStart">0</span> to
+                                            <span id="voterShowingEnd">0</span> of
+                                            <span id="voterShowingTotal">0</span> voters
+                                        </small>
+                                    </div>
+                                    <div class="col-md-4 col-sm-12 mb-2 mb-md-0 text-center">
+                                        <select class="form-select form-select-sm d-inline-block w-auto"
+                                                id="voterPageSize"
+                                                aria-label="Select number of voters per page">
+                                            <option value="25">25 per page</option>
+                                            <option value="50">50 per page</option>
+                                            <option value="100" selected>100 per page</option>
+                                            <option value="200">200 per page</option>
+                                            <option value="500">500 per page</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4 col-sm-12">
+                                        <nav aria-label="Voter list pagination">
+                                            <ul class="pagination pagination-sm justify-content-end mb-0"
+                                                id="voterListPagination"
+                                                role="navigation">
+                                                <li class="page-item disabled">
+                                                    <a class="page-link" href="#" tabindex="-1"
+                                                       aria-label="Go to previous page" aria-disabled="true">
+                                                        <i class="bi bi-chevron-left" aria-hidden="true"></i> Previous
+                                                    </a>
+                                                </li>
+                                                <li class="page-item disabled">
+                                                    <a class="page-link" href="#" tabindex="-1"
+                                                       aria-label="Go to next page" aria-disabled="true">
+                                                        Next <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </nav>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- End Tab Content -->
+
+            <!-- System Status Dashboard (outside tabs) -->
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header bg-secondary text-white">
+                            <i class="bi bi-activity"></i> System Status
+                        </div>
+                        <div class="card-body">
+                            <div id="status-info">
+                                <div class="text-center text-muted py-3">
+                                    <div class="spinner-border spinner-border-sm" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2">Loading system status...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Phase Progress Indicator -->
+            <div class="row mt-3">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header bg-secondary text-white">
+                            <i class="bi bi-list-check"></i> Implementation Progress
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col">
+                                    <div class="phase-indicator completed">
+                                        <i class="bi bi-check-circle-fill text-success" style="font-size: 2rem;"></i>
+                                        <p class="small fw-bold mt-2 mb-0">Phase 1</p>
+                                        <p class="small text-muted">Infrastructure</p>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="phase-indicator completed">
+                                        <i class="bi bi-check-circle-fill text-success" style="font-size: 2rem;"></i>
+                                        <p class="small fw-bold mt-2 mb-0">Phase 2</p>
+                                        <p class="small text-muted">Data Import</p>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="phase-indicator completed">
+                                        <i class="bi bi-check-circle-fill text-success" style="font-size: 2rem;"></i>
+                                        <p class="small fw-bold mt-2 mb-0">Phase 3</p>
+                                        <p class="small text-muted">Geocoding</p>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="phase-indicator completed">
+                                        <i class="bi bi-check-circle-fill text-success" style="font-size: 2rem;"></i>
+                                        <p class="small fw-bold mt-2 mb-0">Phase 4</p>
+                                        <p class="small text-muted">Frontend</p>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="phase-indicator pending">
+                                        <i class="bi bi-circle text-secondary" style="font-size: 2rem;"></i>
+                                        <p class="small fw-bold mt-2 mb-0">Phase 5</p>
+                                        <p class="small text-muted">Advanced</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Offcanvas Filter Panel -->
+        <!-- CRITICAL FIX #3: aria-expanded attribute managed by Bootstrap -->
+        <div class="offcanvas offcanvas-start" tabindex="-1" id="filterOffcanvas" aria-labelledby="filterOffcanvasLabel">
+            <div class="offcanvas-header">
+                <h5 class="offcanvas-title" id="filterOffcanvasLabel">
+                    <i class="bi bi-funnel" aria-hidden="true"></i> Filters
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close filters panel"></button>
+            </div>
+            <div class="offcanvas-body">
+                <!-- Search Input -->
+                <!-- CRITICAL FIX #3: Added aria-describedby for mobile search -->
+                <div class="mb-3">
+                    <label for="searchInputMobile" class="form-label small fw-bold">Search Voter</label>
+                    <input type="text" class="form-control" id="searchInputMobile" 
+                           placeholder="Name or address..."
+                           aria-describedby="searchHelpMobile"
+                           aria-label="Search for voter by name or address">
+                    <small id="searchHelpMobile" class="form-text text-muted">Filter voters by name or address</small>
+                </div>
+                
+                <!-- Precinct Filter -->
+                <!-- CRITICAL FIX #3: Added aria-label for mobile precinct filter -->
+                <div class="mb-3">
+                    <label for="precinctFilterMobile" class="form-label small fw-bold">Precinct</label>
+                    <select class="form-select" id="precinctFilterMobile" disabled
+                            aria-label="Filter voters by precinct number">
+                        <option value="">All Precincts</option>
+                    </select>
+                </div>
+                
+                <!-- Super Voter Filter -->
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="superVoterFilterMobile">
+                        <label class="form-check-label small" for="superVoterFilterMobile">
+                            <i class="bi bi-star-fill text-success"></i> Super Voters Only
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Geocoded Filter -->
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="geocodedFilterMobile">
+                        <label class="form-check-label small" for="geocodedFilterMobile">
+                            <i class="bi bi-geo-alt-fill text-info"></i> Geocoded Only
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Mobile: Party Affiliation Filters -->
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Party Affiliation</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="republicanFilterMobile">
+                        <label class="form-check-label small" for="republicanFilterMobile">
+                            <i class="bi bi-circle-fill text-danger"></i> Republican
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="democratFilterMobile">
+                        <label class="form-check-label small" for="democratFilterMobile">
+                            <i class="bi bi-circle-fill text-primary"></i> Democrat
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Mobile: Voting Status Filters -->
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Voting Status</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="regularVotersFilterMobile">
+                        <label class="form-check-label small" for="regularVotersFilterMobile">
+                            <i class="bi bi-check-circle-fill text-success"></i> Regular Voters
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="neverVotedFilterMobile">
+                        <label class="form-check-label small" for="neverVotedFilterMobile">
+                            <i class="bi bi-x-circle-fill text-warning"></i> Never Voted
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Clear Filters Button -->
+                <!-- CRITICAL FIX #3: Added aria-label for mobile clear button -->
+                <div class="d-grid gap-2 mb-3">
+                    <button class="btn btn-outline-secondary" id="clearFiltersMobile"
+                            aria-label="Clear all active filters">
+                        <i class="bi bi-x-circle" aria-hidden="true"></i> Clear Filters
+                    </button>
+                </div>
+
+                <!-- Export Button -->
+                <!-- CRITICAL FIX #3: Added aria-label for mobile export button -->
+                <div class="d-grid gap-2">
+                    <button class="btn btn-primary" id="exportBtnMobile"
+                            aria-label="Export filtered voters to CSV file">
+                        <i class="bi bi-download" aria-hidden="true"></i> Export to CSV
+                    </button>
+                </div>
+
+                <!-- Filter Info -->
+                <!-- CRITICAL FIX #3: Added aria-live for mobile filter info -->
+                <div class="mt-3 text-center" id="filterInfoMobile" aria-live="polite" aria-atomic="true">
+                    <h3 class="mb-0" id="voterCountMobile">0</h3>
+                    <small class="text-muted">voters found</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <!-- CRITICAL FIX #3: Added aria-live and aria-busy for loading state -->
+        <div id="loading-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 9999; align-items: center; justify-content: center;"
+             role="alert" aria-live="assertive" aria-busy="true">
+            <div class="spinner-border text-light" role="status" style="width: 3rem; height: 3rem;">
+                <span class="visually-hidden">Loading voter data...</span>
+            </div>
+        </div>
+
+        <!-- Toast Container -->
+        <!-- CRITICAL FIX #3: Toast notifications use role="alert" by default in Bootstrap -->
+        <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toast-container" aria-live="polite"></div>
+        
+        <!-- Upload Modal -->
+        <div class="modal fade" id="uploadModal" tabindex="-1" 
+             aria-labelledby="uploadModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <!-- Modal header -->
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="uploadModalLabel">Upload Voter Data</h5>
+                        <button type="button" class="btn-close" 
+                                data-bs-dismiss="modal" 
+                                aria-label="Close"></button>
+                    </div>
+                    
+                    <!-- Modal body - File Selection View -->
+                    <div class="modal-body" id="uploadSelectionView">
+                        <!-- Drop zone -->
+                        <div id="dropZone" class="drop-zone" 
+                             role="button" 
+                             tabindex="0"
+                             aria-label="Drag and drop files here or click to browse">
+                            <div class="drop-zone-content">
+                                <i class="bi bi-cloud-upload drop-zone-icon" aria-hidden="true"></i>
+                                <p class="drop-zone-text">Drag and drop file here</p>
+                                <p class="drop-zone-subtext">or click to browse</p>
+                                <p class="drop-zone-info text-muted small">
+                                    Accepted formats: .dbf, .csv<br>
+                                    Maximum size: 100MB
+                                </p>
+                            </div>
+                            <input type="file" 
+                                   id="fileInput" 
+                                   class="visually-hidden" 
+                                   accept=".dbf,.csv"
+                                   aria-label="Select voter data file">
+                        </div>
+                        
+                        <!-- Import options -->
+                        <div class="mt-4">
+                            <label class="form-label fw-bold">Import Mode</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" 
+                                       name="importMode" id="modeReplace" 
+                                       value="replace" checked>
+                                <label class="form-check-label" for="modeReplace">
+                                    Replace existing records
+                                    <small class="text-muted d-block">
+                                        Update existing voter records with new data
+                                    </small>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" 
+                                       name="importMode" id="modeSkip" 
+                                       value="skip">
+                                <label class="form-check-label" for="modeSkip">
+                                    Skip duplicates
+                                    <small class="text-muted d-block">
+                                        Keep existing records, only add new ones
+                                    </small>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" 
+                                       name="importMode" id="modeFlag" 
+                                       value="flag">
+                                <label class="form-check-label" for="modeFlag">
+                                    Flag conflicts
+                                    <small class="text-muted d-block">
+                                        Mark records that differ from existing data
+                                    </small>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- CSV options (hidden by default) -->
+                        <div class="mt-3" id="csvOptions" style="display: none;">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" 
+                                       id="hasHeaders" checked>
+                                <label class="form-check-label" for="hasHeaders">
+                                    CSV file has header row
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Selected file info -->
+                        <div id="fileInfo" class="mt-4 alert alert-info" 
+                             style="display: none;" role="status">
+                            <strong id="fileName">No file selected</strong><br>
+                            <small id="fileSize" class="text-muted"></small>
+                            <button type="button" class="btn-close float-end" 
+                                    id="removeFile"
+                                    aria-label="Remove selected file"></button>
+                        </div>
+                    </div>
+                    
+                    <!-- Modal body - Progress View -->
+                    <div class="modal-body" id="uploadProgressView" style="display: none;">
+                        <div class="text-center mb-4">
+                            <h6 id="progressFileName">Uploading...</h6>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span id="progressStatus">Processing file...</span>
+                                <span id="progressPercent">0%</span>
+                            </div>
+                            <div class="progress" style="height: 25px;">
+                                <div id="progressBar" 
+                                     class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" 
+                                     aria-valuenow="0" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100"
+                                     style="width: 0%">
+                                    0%
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="uploadStats" class="mt-3" style="display: none;">
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <small class="text-muted">Processed</small>
+                                    <p class="mb-0 fw-bold" id="statsProcessed">0</p>
+                                </div>
+                                <div class="col-4">
+                                    <small class="text-muted">Successful</small>
+                                    <p class="mb-0 fw-bold text-success" id="statsSuccessful">0</p>
+                                </div>
+                                <div class="col-4">
+                                    <small class="text-muted">Failed</small>
+                                    <p class="mb-0 fw-bold text-danger" id="statsFailed">0</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="uploadTimer" class="mt-3 text-center text-muted small">
+                            <div>Elapsed: <span id="timerElapsed">00:00</span></div>
+                            <div id="timerEstimate" style="display: none;">
+                                Estimated remaining: <span id="timerRemaining">--:--</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Modal body - Results View -->
+                    <div class="modal-body" id="uploadResultsView" style="display: none;">
+                        <div class="text-center mb-4">
+                            <i id="resultIcon" class="bi bi-check-circle-fill text-success" 
+                               style="font-size: 3rem;" aria-hidden="true"></i>
+                            <h5 id="resultTitle" class="mt-2">Upload Complete</h5>
+                            <p id="resultMessage" class="text-muted"></p>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">Summary</h6>
+                                <ul class="list-unstyled mb-0">
+                                    <li>Total records: <strong id="resultTotal">0</strong></li>
+                                    <li>Successfully imported: <strong id="resultSuccess" class="text-success">0</strong></li>
+                                    <li>Failed: <strong id="resultFailed" class="text-danger">0</strong></li>
+                                    <li>Duration: <strong id="resultDuration">00:00</strong></li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div id="errorSection" class="mt-3 alert alert-warning" 
+                             style="display: none;" role="alert">
+                            <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                            <strong id="errorCount">0</strong> records failed validation
+                            <button type="button" class="btn btn-sm btn-outline-warning float-end"
+                                    id="viewErrorsBtn">
+                                View Error Details
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Modal footer - varies by view -->
+                    <div class="modal-footer" id="uploadFooter">
+                        <button type="button" class="btn btn-secondary" 
+                                data-bs-dismiss="modal" id="cancelBtn">
+                            Cancel
+                        </button>
+                        <button type="button" class="btn btn-primary" 
+                                id="uploadFileBtn" disabled>
+                            Upload File
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Voter Detail Modal -->
+        <div class="modal fade" id="voterDetailModal" tabindex="-1" 
+             aria-labelledby="voterDetailModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="voterDetailModalLabel">Voter Details</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Voter Info -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h6>Personal Information</h6>
+                                <dl class="row">
+                                    <dt class="col-sm-4">Name:</dt>
+                                    <dd class="col-sm-8" id="detailName">-</dd>
+                                    
+                                    <dt class="col-sm-4">Voter ID:</dt>
+                                    <dd class="col-sm-8" id="detailVoterId">-</dd>
+                                    
+                                    <dt class="col-sm-4">Address:</dt>
+                                    <dd class="col-sm-8" id="detailAddress">-</dd>
+                                    
+                                    <dt class="col-sm-4">City, ZIP:</dt>
+                                    <dd class="col-sm-8" id="detailCityZip">-</dd>
+                                </dl>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Voting Information</h6>
+                                <dl class="row">
+                                    <dt class="col-sm-5">Precinct:</dt>
+                                    <dd class="col-sm-7" id="detailPrecinct">-</dd>
+                                    
+                                    <dt class="col-sm-5">Party:</dt>
+                                    <dd class="col-sm-7" id="detailParty">-</dd>
+                                    
+                                    <dt class="col-sm-5">Super Voter:</dt>
+                                    <dd class="col-sm-7" id="detailSuperVoter">-</dd>
+                                    
+                                    <dt class="col-sm-5">Participation:</dt>
+                                    <dd class="col-sm-7" id="detailParticipation">-</dd>
+                                    
+                                    <dt class="col-sm-5">Geocoded:</dt>
+                                    <dd class="col-sm-7" id="detailGeocoded">-</dd>
+                                </dl>
+                            </div>
+                        </div>
+                        
+                        <!-- Election History -->
+                        <h6>Election History</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Election</th>
+                                        <th>Voted</th>
+                                        <th>Party</th>
+                                        <th>Early Vote</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="electionHistoryBody">
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted">Loading...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Error Details Modal -->
+        <div class="modal fade" id="errorDetailsModal" tabindex="-1"
+             aria-labelledby="errorDetailsModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="errorDetailsModalLabel">Import Errors</h5>
+                        <button type="button" class="btn-close" 
+                                data-bs-dismiss="modal"
+                                aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="errorDetailsList"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-primary" 
+                                id="downloadErrorsBtn">
+                            <i class="bi bi-download"></i> Download Error Report
+                        </button>
+                        <button type="button" class="btn btn-secondary" 
+                                data-bs-dismiss="modal">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        
+        <!-- Footer -->
+        <footer class="bg-light text-center text-muted py-3 mt-4">
+            <div class="container">
+                <small>
+                    Voter Outreach Platform &copy; 2026 | Obion County Election Commission<br>
+                    <span id="app-version">Phase 4.0</span> | 
+                    <a href="#" class="text-muted">Documentation</a> | 
+                    <a href="#" class="text-muted">Support</a>
+                </small>
+            </div>
+        </footer>
+    </div>
+    
+    <!-- Bootstrap JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- CRITICAL FIX #1: Google Maps API Key Configuration -->
+    <!-- 
+        ⚠️ IMPORTANT: Google Maps API Key Setup Required
+        
+        To enable the interactive map features, you must:
+        
+        1. Obtain a Google Maps JavaScript API key:
+           - Go to: https://console.cloud.google.com/
+           - Create a new project or select existing project
+           - Enable "Maps JavaScript API"
+           - Create credentials (API key)
+        
+        2. Secure your API key:
+           - Add HTTP referrer restrictions in Google Cloud Console
+           - Restrict to your domain: https://yourdomain.com/*
+           - For local development: http://localhost:*
+        
+        3. Replace YOUR_API_KEY below with your actual API key:
+           - For production: Use environment variable and build process
+           - For development: Replace directly (DO NOT commit to version control)
+        
+        4. Optional: Add to .env file and use build tool to inject:
+           GOOGLE_MAPS_API_KEY=your_key_here
+        
+        Without a valid API key, the map will display an error.
+    -->
+    <script>
+        // Google Maps API loaded dynamically from backend configuration
+        // This allows the API key to be stored securely in .env file
+        window.gm_authFailure = function() {
+            console.error('❌ Google Maps API Key Error: Invalid or missing API key');
+            const mapElement = document.getElementById('map');
+            if (mapElement) {
+                mapElement.innerHTML = `
+                    <div style="display: flex; align-items: center; justify-content: center; height: 100%; background: #f8f9fa; padding: 20px; text-align: center;">
+                        <div>
+                            <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                            <h4 class="mt-3">Google Maps Configuration Required</h4>
+                            <p class="text-muted">The Google Maps API key is missing or invalid.</p>
+                            <p class="small">Please configure GOOGLE_MAPS_API_KEY in your .env file.</p>
+                            <a href="https://developers.google.com/maps/documentation/javascript/get-api-key" 
+                               class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener noreferrer">
+                                Get API Key
+                            </a>
+                        </div>
+                    </div>
+                `;
+            }
+        };
+    </script>
+    
+    <!-- Google Maps script is loaded dynamically by app.js using API key from .env -->
+    
+    <!-- Google Maps Marker Clusterer -->
+    <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
+    
+    <!-- Keyboard Controller - Phase 3: Layout & Navigation -->
+    <script src="/js/keyboard-controller.js"></script>
+    
+    <!-- Toast Controller - Phase 4: Enhanced Interactivity -->
+    <script src="/js/toast-controller.js"></script>
+    
+    <!-- Configuration Module - Load FIRST -->
+    <script src="/js/config.js"></script>
+    
+    <!-- Theme Controller - Phase 1: Design System -->
+    <script src="/js/theme-controller.js"></script>
+    
+    <!-- Custom Application JavaScript Modules -->
+    <script src="/js/utils.js"></script>
+    <script src="/js/state-manager.js"></script>
+    <script src="/js/voter-service.js"></script>
+    <script src="/js/upload-service.js"></script>
+    <script src="/js/upload-controller.js"></script>
+    <script src="/js/map-controller.js"></script>
+    <script src="/js/filter-controller.js"></script>
+    <script src="/js/voter-list-controller.js"></script>
+    <script src="/js/chart-controller.js"></script>
+    <script src="/js/target-list-controller.js"></script>
+    <script src="/js/route-planner-controller.js"></script>
+    <script src="/js/app.js"></script>
+    
+    <!-- Initialize application with configuration -->
+    <script>
+        // Ensure configuration is loaded before app starts
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Load configuration from backend
+            await loadAppConfig();
+            
+            // Update dynamic UI elements (location badge, footer, version)
+            updateDynamicUIElements();
+            
+            // App will initialize automatically via existing DOMContentLoaded in app.js
+        });
+    </script>
+</body>
+</html>

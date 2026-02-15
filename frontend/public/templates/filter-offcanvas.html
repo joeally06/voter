@@ -1,0 +1,105 @@
+<!-- Filter Offcanvas Panel Template (Mobile) -->
+<div class="fixed top-0 right-0 h-full w-80 bg-white dark:bg-secondary-800 shadow-xl transform translate-x-full transition-transform duration-300 z-50 overflow-y-auto" tabindex="-1" id="filterOffcanvas" aria-labelledby="filterOffcanvasLabel">
+    <div class="flex items-center justify-between px-4 py-3 border-b border-secondary-200 dark:border-secondary-700">
+        <h5 class="text-lg font-semibold text-secondary-900 dark:text-white" id="filterOffcanvasLabel">
+            <i class="bi bi-funnel" aria-hidden="true"></i> Filters
+        </h5>
+        <button type="button" class="text-secondary-400 hover:text-secondary-600 dark:hover:text-secondary-300" data-bs-dismiss="offcanvas" aria-label="Close filters panel"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="px-4 py-3">
+        <!-- Search Input -->
+        <div class="mb-3">
+            <label for="searchInputMobile" class="block text-sm font-bold text-secondary-700 dark:text-secondary-300 mb-1">Search Voter</label>
+            <input type="text" class="block w-full px-3 py-2 border border-secondary-300 dark:border-secondary-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-secondary-800 text-secondary-900 dark:text-secondary-100" id="searchInputMobile" 
+                   placeholder="Name or address..."
+                   aria-describedby="searchHelpMobile"
+                   aria-label="Search for voter by name or address">
+            <small id="searchHelpMobile" class="form-text text-secondary-500 dark:text-secondary-400">Filter voters by name or address</small>
+        </div>
+        
+        <!-- Precinct Filter -->
+        <div class="mb-3">
+            <label for="precinctFilterMobile" class="block text-sm font-bold text-secondary-700 dark:text-secondary-300 mb-1">Precinct</label>
+            <select class="block w-full px-3 py-2 border border-secondary-300 dark:border-secondary-600 rounded-md focus:ring-2 focus:ring-primary-500 bg-white dark:bg-secondary-800 text-secondary-900 dark:text-secondary-100" id="precinctFilterMobile" disabled
+                    aria-label="Filter voters by precinct number">
+                <option value="">All Precincts</option>
+            </select>
+        </div>
+        
+        <!-- Super Voter Filter -->
+        <div class="mb-3">
+            <div class="flex items-center">
+                <input class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded" type="checkbox" id="superVoterFilterMobile">
+                <label class="ml-2 block text-sm text-secondary-900 dark:text-secondary-100" for="superVoterFilterMobile">
+                    <i class="bi bi-star-fill text-success"></i> Super Voters Only
+                </label>
+            </div>
+        </div>
+        
+        <!-- Geocoded Filter -->
+        <div class="mb-3">
+            <div class="flex items-center">
+                <input class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded" type="checkbox" id="geocodedFilterMobile">
+                <label class="ml-2 block text-sm text-secondary-900 dark:text-secondary-100" for="geocodedFilterMobile">
+                    <i class="bi bi-geo-alt-fill text-info"></i> Geocoded Only
+                </label>
+            </div>
+        </div>
+
+        <!-- Mobile: Party Affiliation Filters -->
+        <div class="mb-3">
+            <label class="block text-sm font-bold text-secondary-700 dark:text-secondary-300 mb-1">Party Affiliation</label>
+            <div class="flex items-center mb-2">
+                <input class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded" type="checkbox" id="republicanFilterMobile">
+                <label class="ml-2 block text-sm text-secondary-900 dark:text-secondary-100" for="republicanFilterMobile">
+                    <i class="bi bi-circle-fill text-danger"></i> Republican
+                </label>
+            </div>
+            <div class="flex items-center">
+                <input class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded" type="checkbox" id="democratFilterMobile">
+                <label class="ml-2 block text-sm text-secondary-900 dark:text-secondary-100" for="democratFilterMobile">
+                    <i class="bi bi-circle-fill text-primary"></i> Democrat
+                </label>
+            </div>
+        </div>
+
+        <!-- Mobile: Voting Status Filters -->
+        <div class="mb-3">
+            <label class="block text-sm font-bold text-secondary-700 dark:text-secondary-300 mb-1">Voting Status</label>
+            <div class="flex items-center mb-2">
+                <input class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded" type="checkbox" id="regularVotersFilterMobile">
+                <label class="ml-2 block text-sm text-secondary-900 dark:text-secondary-100" for="regularVotersFilterMobile">
+                    <i class="bi bi-check-circle-fill text-success"></i> Regular Voters
+                </label>
+            </div>
+            <div class="flex items-center">
+                <input class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded" type="checkbox" id="neverVotedFilterMobile">
+                <label class="ml-2 block text-sm text-secondary-900 dark:text-secondary-100" for="neverVotedFilterMobile">
+                    <i class="bi bi-x-circle-fill text-warning"></i> Never Voted
+                </label>
+            </div>
+        </div>
+
+        <!-- Clear Filters Button -->
+        <div class="grid gap-2 mb-3">
+            <button class="btn-secondary" id="clearFiltersMobile"
+                    aria-label="Clear all active filters">
+                <i class="bi bi-x-circle" aria-hidden="true"></i> Clear Filters
+            </button>
+        </div>
+
+        <!-- Export Button -->
+        <div class="grid gap-2">
+            <button class="btn-primary" id="exportBtnMobile"
+                    aria-label="Export filtered voters to CSV file">
+                <i class="bi bi-download" aria-hidden="true"></i> Export to CSV
+            </button>
+        </div>
+
+        <!-- Filter Info -->
+        <div class="mt-3 text-center" id="filterInfoMobile" aria-live="polite" aria-atomic="true">
+            <h3 class="mb-0 text-secondary-900 dark:text-white" id="voterCountMobile">0</h3>
+            <small class="text-secondary-500 dark:text-secondary-400">voters found</small>
+        </div>
+    </div>
+</div>

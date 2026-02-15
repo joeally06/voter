@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Voter Outreach Platform for Obion County - Political campaign mapping and voter data management">
+    <title>Voter Outreach Platform - Obion County</title>
+    
+    <!-- Tailwind CSS (Production Build) -->
+    <link rel="stylesheet" href="/css/output.css">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#4f46e5">
+
+    <!-- Bootstrap Icons (Keeping for icon library) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css">
+    
+    <!-- Custom Styles for Route Planning Features -->
+    <style>
+        /* Quota Bar Color States */
+        #quotaBar.quota-ok {
+            background: linear-gradient(90deg, #198754 0%, #157347 100%) !important;
+        }
+        
+        #quotaBar.quota-warning {
+            background: linear-gradient(90deg, #ffc107 0%, #ffb300 100%) !important;
+        }
+        
+        #quotaBar.quota-danger {
+            background: linear-gradient(90deg, #dc3545 0%, #bb2d3b 100%) !important;
+        }
+        
+        /* Marker hover effects (only works for non-optimized markers) */
+        .map-marker {
+            transition: transform 0.2s ease;
+        }
+        
+        .map-marker:hover {
+            transform: scale(1.2);
+        }
+    </style>
+</head>
+<body>
+    <!-- Skip Links for Accessibility -->
+    <a href="#main-content" class="vp-skip-link">Skip to main content</a>
+    <a href="#searchInput" class="vp-skip-link">Skip to search</a>
+    <a href="#route-tab" class="vp-skip-link">Skip to route planning</a>
+    
+    <div id="app">
+        <!-- Navigation Bar -->
+        <nav class="bg-primary-600 dark:bg-primary-700 text-white shadow-lg sticky top-0 z-50">
+            <div class="w-full px-4 md:px-6 py-4 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center justify-center w-10 h-10 bg-white/20 rounded-lg">
+                        <i class="bi bi-geo-alt-fill text-xl"></i>
+                    </div>
+                    <div class="hidden sm:block">
+                        <h1 class="text-lg font-bold leading-tight">Voter Outreach Platform</h1>
+                        <p class="text-xs text-primary-100">Obion County, Tennessee</p>
+                    </div>
+                    <h1 class="sm:hidden text-lg font-bold">Voter Platform</h1>
+                </div>
+                <div class="flex items-center gap-2">
+                    <!-- Theme Toggle Button -->
+                    <button class="inline-flex items-center justify-center min-w-[44px] min-h-[44px] px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-all duration-150" type="button" 
+                            id="theme-toggle-btn" 
+                            aria-label="Toggle dark mode"
+                            title="Toggle dark mode">
+                        <i class="bi bi-moon-fill text-lg" aria-hidden="true"></i>
+                    </button>
+                    
+                    <!-- Mobile Filter Toggle -->
+                    <button class="inline-flex items-center gap-2 min-w-[44px] min-h-[44px] px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-all duration-150 md:hidden" type="button" 
+                            data-bs-toggle="offcanvas" data-bs-target="#filterOffcanvas" 
+                            aria-controls="filterOffcanvas" id="mobileFilterBtn"
+                            aria-label="Open filters panel" aria-expanded="false">
+                        <i class="bi bi-funnel text-lg" aria-hidden="true"></i>
+                        <span class="hidden xs:inline text-sm font-medium">Filters</span>
+                        <span class="vp-count-badge" id="filterBadgeMobile" style="display: none;">0</span>
+                    </button>
+                    
+                    <!-- Keyboard Help -->
+                    <button class="hidden md:inline-flex items-center gap-1.5 min-w-[44px] min-h-[44px] px-3 py-2 text-sm font-medium bg-white/10 hover:bg-white/20 rounded-lg transition-all duration-150" 
+                            id="keyboard-help-btn-top"
+                            type="button" 
+                            aria-label="Show keyboard shortcuts" 
+                            title="Keyboard shortcuts (Press ?)">
+                        <i class="bi bi-keyboard"></i>
+                        <span class="vp-kbd bg-white/20 border-white/30">?</span>
+                    </button>
+                </div>
+            </div>
+        </nav>
+        
+        <!-- Tab Navigation -->
+        <div class="border-b border-secondary-200 dark:border-secondary-700 bg-white dark:bg-secondary-900">
+            <div class="w-full px-4 md:px-6">
+                <nav class="-mb-px flex gap-2" aria-label="Main navigation" role="tablist">
+                    <button class="inline-flex items-center gap-2 px-4 md:px-6 py-3 md:py-4 font-semibold text-sm border-b-2 border-primary-600 text-primary-600 dark:text-primary-400 transition-all duration-150 vp-touch-target" 
+                            id="route-tab-btn"
+                            data-bs-toggle="tab" data-bs-target="#route-tab"
+                            type="button" role="tab" aria-controls="route-tab" aria-selected="true">
+                        <i class="bi bi-map text-base"></i>
+                        <span>Route Planning</span>
+                        <kbd class="vp-kbd hidden sm:inline-flex">1</kbd>
+                    </button>
+                    <button class="inline-flex items-center gap-2 px-4 md:px-6 py-3 md:py-4 font-semibold text-sm border-b-2 border-transparent text-secondary-600 dark:text-secondary-400 hover:text-secondary-900 dark:hover:text-secondary-200 hover:border-secondary-300 dark:hover:border-secondary-600 transition-all duration-150 vp-touch-target" 
+                            id="analytics-tab-btn"
+                            data-bs-toggle="tab" data-bs-target="#analytics-tab"
+                            type="button" role="tab" aria-controls="analytics-tab" aria-selected="false">
+                        <i class="bi bi-bar-chart-fill text-base"></i>
+                        <span>Analytics</span>
+                        <kbd class="vp-kbd hidden sm:inline-flex">2</kbd>
+                    </button>
+                    <div class="flex-1"></div>
+                    <button class="inline-flex items-center gap-2 px-4 py-3 md:py-4 font-medium text-sm text-secondary-600 dark:text-secondary-400 hover:text-secondary-900 dark:hover:text-secondary-200 hover:bg-secondary-50 dark:hover:bg-secondary-800 rounded-t-lg transition-all duration-150 vp-touch-target md:hidden" 
+                            id="keyboard-help-btn"
+                            type="button" 
+                            aria-label="Show keyboard shortcuts" 
+                            title="Keyboard shortcuts">
+                        <i class="bi bi-keyboard text-base"></i>
+                        <kbd class="vp-kbd">?</kbd>
+                    </button>
+                </nav>
+            </div>
+        </div>
+        
+        <!-- Main Content Container -->
+        <div class="bg-secondary-50 dark:bg-secondary-900 min-h-screen">
+            <div class="w-full px-4 md:px-6 py-6">
+
+            <!-- Tab Content -->
+            <div class="tab-content">
+                <!-- Route Planning Tab -->
+                <div class="tab-pane fade show active" id="route-tab" role="tabpanel" aria-labelledby="route-tab-btn">
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
+                        <!-- Left Sidebar - Filters and Controls (Desktop) -->
+                        <div class="lg:col-span-2 space-y-4">
+                            <!-- Filter Card -->
+                            <div class="vp-card">
+                                <div class="vp-card-header">
+                                    <h3 class="vp-card-title">
+                                        <i class="bi bi-funnel text-primary-600 dark:text-primary-400"></i>
+                                        <span>Filters</span>
+                                        <span class="vp-count-badge ml-auto" id="filterBadge" style="display: none;">0</span>
+                                    </h3>
+                                </div>
+                                <div class="vp-card-body space-y-4">
+                                    <!-- Search Input -->
+                                    <div>
+                                        <label for="searchInput" class="vp-label">Search Voter</label>
+                                        <div class="relative">
+                                            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                                                <i class="bi bi-search text-secondary-400"></i>
+                                            </div>
+                                            <input type="text" 
+                                                   class="vp-search-input" 
+                                                   id="searchInput" 
+                                                   placeholder="Name or address..." 
+                                                   aria-describedby="searchHelp"
+                                                   aria-label="Search for voter by name or address">
+                                        </div>
+                                        <p id="searchHelp" class="mt-1 text-xs text-secondary-500 dark:text-secondary-400">Filter voters by name or address</p>
+                                    </div>
+                            
+                                    <!-- Precinct Filter -->
+                                    <div>
+                                        <label for="precinctFilter" class="vp-label">Precinct</label>
+                                        <select class="vp-select" 
+                                                id="precinctFilter" 
+                                                disabled 
+                                                aria-label="Filter voters by precinct number">
+                                            <option value="">All Precincts</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Super Voter Filter -->
+                                    <div class="flex items-start gap-3">
+                                        <div class="flex items-center h-5">
+                                            <input class="vp-checkbox" 
+                                                   type="checkbox" 
+                                                   id="superVoterFilter">
+                                        </div>
+                                        <div class="flex flex-col">
+                                            <label for="superVoterFilter" class="text-sm font-medium text-secondary-700 dark:text-secondary-300 flex items-center gap-1.5">
+                                                <i class="bi bi-star-fill text-success-600"></i>
+                                                <span>Super Voters Only</span>
+                                            </label>
+                                            <p class="text-xs text-secondary-500 dark:text-secondary-400">Voters with 7+ elections</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Geocoded Filter -->
+                                    <div class="flex items-start gap-3">
+                                        <div class="flex items-center h-5">
+                                            <input class="vp-checkbox" 
+                                                   type="checkbox" 
+                                                   id="geocodedFilter">
+                                        </div>
+                                        <div class="flex flex-col">
+                                            <label for="geocodedFilter" class="text-sm font-medium text-secondary-700 dark:text-secondary-300 flex items-center gap-1.5">
+                                                <i class="bi bi-geo-alt-fill text-info-600"></i>
+                                                <span>Geocoded Only</span>
+                                            </label>
+                                            <p class="text-xs text-secondary-500 dark:text-secondary-400">Show mapped addresses</p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Party Affiliation Filters -->
+                                    <fieldset>
+                                        <legend class="vp-label mb-3">Party Affiliation</legend>
+                                        <div class="space-y-2">
+                                            <div class="flex items-center gap-3">
+                                                <input class="vp-radio" 
+                                                       type="checkbox" 
+                                                       id="republicanFilter">
+                                                <label for="republicanFilter" class="text-sm font-medium text-secondary-700 dark:text-secondary-300 flex items-center gap-1.5">
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-danger-600 text-white">R</span>
+                                                    <span>Republican</span>
+                                                </label>
+                                            </div>
+                                            <div class="flex items-center gap-3">
+                                                <input class="vp-radio" 
+                                                       type="checkbox" 
+                                                       id="democratFilter">
+                                                <label for="democratFilter" class="text-sm font-medium text-secondary-700 dark:text-secondary-300 flex items-center gap-1.5">
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-primary-600 text-white">D</span>
+                                                    <span>Democrat</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </fieldset>
+
+                                    <!-- Voting Status Filters -->
+                                    <fieldset>
+                                        <legend class="vp-label mb-3">Voting Status</legend>
+                                        <div class="space-y-2">
+                                            <div class="flex items-center gap-3">
+                                                <input class="vp-checkbox" 
+                                                       type="checkbox" 
+                                                       id="regularVotersFilter">
+                                                <label for="regularVotersFilter" class="text-sm font-medium text-secondary-700 dark:text-secondary-300 flex items-center gap-1.5">
+                                                    <i class="bi bi-check-circle-fill text-success-600"></i>
+                                                    <span>Regular Voters</span>
+                                                </label>
+                                            </div>
+                                            <div class="flex items-center gap-3">
+                                                <input class="vp-checkbox" 
+                                                       type="checkbox" 
+                                                       id="neverVotedFilter">
+                                                <label for="neverVotedFilter" class="text-sm font-medium text-secondary-700 dark:text-secondary-300 flex items-center gap-1.5">
+                                                    <i class="bi bi-x-circle-fill text-warning-600"></i>
+                                                    <span>Never Voted</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </fieldset>
+
+                                    <!-- Clear Filters Button -->
+                                    <button class="btn-ghost w-full justify-center" 
+                                            id="clearFilters"
+                                            aria-label="Clear all active filters">
+                                        <i class="bi bi-x-circle" aria-hidden="true"></i>
+                                        <span>Clear Filters</span>
+                                    </button>
+
+                                    <!-- Filter Info -->
+                                    <div class="text-center p-4 bg-secondary-50 dark:bg-secondary-800/50 rounded-lg" 
+                                         id="filterInfo" 
+                                         aria-live="polite" 
+                                         aria-atomic="true">
+                                        <div class="text-3xl font-bold text-secondary-900 dark:text-white" id="voterCount">0</div>
+                                        <div class="text-xs text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">voters found</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Actions Card -->
+                            <div class="vp-card">
+                                <div class="vp-card-header">
+                                    <h3 class="vp-card-title">
+                                        <i class="bi bi-lightning-charge text-warning-600 dark:text-warning-400"></i>
+                                        <span>Quick Actions</span>
+                                    </h3>
+                                </div>
+                                <div class="vp-card-body space-y-3">
+                                    <!-- Upload Data Button -->
+                                    <button class="btn-success w-full justify-center" 
+                                            id="uploadBtn" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#uploadModal"
+                                            aria-label="Upload voter data file">
+                                        <i class="bi bi-cloud-upload" aria-hidden="true"></i>
+                                        <span>Upload Data</span>
+                                    </button>
+                                    
+                                    <!-- Export Button -->
+                                    <button class="btn-primary w-full justify-center" 
+                                            id="exportBtn"
+                                            aria-label="Export filtered voters to CSV file">
+                                        <i class="bi bi-download" aria-hidden="true"></i>
+                                        <span>Export to CSV</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                
+                        <!-- Center Column - Map -->
+                        <div class="lg:col-span-7">
+                            <!-- Map Container -->
+                            <div class="vp-card">
+                                <div class="vp-card-header">
+                                    <div class="flex items-center justify-between w-full">
+                                        <h3 class="vp-card-title">
+                                            <i class="bi bi-map text-primary-600 dark:text-primary-400"></i>
+                                            <span>Interactive Voter Map</span>
+                                        </h3>
+                                        <span class="vp-badge vp-badge-success">
+                                            <i class="bi bi-broadcast"></i>
+                                            <span>Live</span>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="p-0">
+                                    <div id="map" 
+                                         style="height: calc(100vh - 280px); min-height: 500px;" 
+                                         role="application" 
+                                         aria-label="Interactive voter location map for Obion County showing geocoded voter addresses"
+                                         tabindex="0"
+                                         class="rounded-b-lg overflow-hidden w-full">
+                                        <!-- Google Maps will initialize here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Right Column - Route Planning Controls -->
+                        <div class="lg:col-span-3 space-y-4">
+                            <!-- Route Planning Card -->
+                            <div class="vp-card">
+                                <div class="vp-card-header">
+                                    <h3 class="vp-card-title">
+                                        <i class="bi bi-route text-primary-600 dark:text-primary-400"></i>
+                                        <span>Route Planning</span>
+                                    </h3>
+                                </div>
+                                <div class="vp-card-body space-y-4">
+                                    <!-- Selected Voters Section -->
+                                    <div>
+                                        <h6 class="text-sm font-semibold text-secondary-700 dark:text-secondary-300 mb-3">
+                                            Selected Voters (<span id="selectedVotersCount">0</span>)
+                                        </h6>
+                                        <div class="space-y-2 mb-3">
+                                            <button id="selectFromMapVoters" class="btn-primary w-full justify-center text-xs">
+                                                <i class="bi bi-cursor"></i>
+                                                <span>Select from Map</span>
+                                                <span class="vp-badge vp-badge-info">Max 50</span>
+                                            </button>
+                                            <button id="selectFromListVoters" class="btn-secondary w-full justify-center text-xs">
+                                                <i class="bi bi-list"></i>
+                                                <span>Select from List</span>
+                                            </button>
+                                            <button id="clearRouteSelection" class="btn-ghost w-full justify-center text-xs text-danger-600 hover:bg-danger-50">
+                                                <i class="bi bi-x-circle"></i>
+                                                <span>Clear Selection</span>
+                                            </button>
+                                        </div>
+                                        <ul id="selectedVotersList" 
+                                            class="space-y-1 max-h-48 overflow-y-auto scrollbar-thin rounded-lg border border-secondary-200 dark:border-secondary-700 bg-secondary-50 dark:bg-secondary-800/50 p-2">
+                                            <li class="text-secondary-500 dark:text-secondary-400 text-center text-xs py-2">No voters selected</li>
+                                        </ul>
+                                    </div>
+
+                                    <!-- Route Options Section -->
+                                    <div>
+                                        <h6 class="text-sm font-semibold text-secondary-700 dark:text-secondary-300 mb-3">Route Options</h6>
+                                        <div class="space-y-3">
+                                            <div>
+                                                <label for="travelMode" class="vp-label">Travel Mode</label>
+                                                <select id="travelMode" class="vp-select text-sm">
+                                                    <option value="walking" selected>🚶 Walking</option>
+                                                    <option value="driving">🚗 Driving</option>
+                                                    <option value="bicycling">🚴 Bicycling</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label for="algorithm" class="vp-label">Algorithm</label>
+                                                <select id="algorithm" class="vp-select text-sm">
+                                                    <option value="hybrid" selected>Hybrid (Recommended)</option>
+                                                    <option value="nearest_neighbor">Nearest Neighbor</option>
+                                                    <option value="2opt">2-Opt Optimization</option>
+                                                </select>
+                                            </div>
+                                            <button id="calculateRoute" class="btn-primary w-full justify-center">
+                                                <i class="bi bi-compass"></i>
+                                                <span>Calculate Route</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Route Results Section -->
+                                    <div id="routeResults" style="display: none;">
+                                        <h6 class="text-sm font-semibold text-secondary-700 dark:text-secondary-300 mb-3">Route Results</h6>
+                                        <div class="p-4 bg-success-50 dark:bg-success-900/20 border border-success-200 dark:border-success-800 rounded-lg space-y-2">
+                                            <div class="flex items-center justify-between text-sm">
+                                                <span class="font-medium text-success-900 dark:text-success-100">Distance:</span>
+                                                <span class="font-bold text-success-700 dark:text-success-300" id="totalDistance">-</span>
+                                            </div>
+                                            <div class="flex items-center justify-between text-sm">
+                                                <span class="font-medium text-success-900 dark:text-success-100">Duration:</span>
+                                                <span class="font-bold text-success-700 dark:text-success-300" id="totalDuration">-</span>
+                                            </div>
+                                            <div class="flex items-center justify-between text-sm">
+                                                <span class="font-medium text-success-900 dark:text-success-100">Stops:</span>
+                                                <span class="font-bold text-success-700 dark:text-success-300" id="stopCount">-</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Export Options -->
+                                        <div id="routeExportOptions" class="mt-3 space-y-2">
+                                            <p class="text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">Export Route</p>
+                                            <div class="grid grid-cols-2 gap-2">
+                                                <button class="btn-secondary btn-sm justify-center" id="exportCSV" title="Download CSV address list">
+                                                    <i class="bi bi-filetype-csv"></i>
+                                                    <span>CSV</span>
+                                                </button>
+                                                <button class="btn-success btn-sm justify-center" id="exportGoogleMaps" title="Export to navigation apps">
+                                                    <i class="bi bi-share"></i>
+                                                    <span>Export</span>
+                                                </button>
+                                            </div>
+                                            <p class="text-xs text-secondary-500 dark:text-secondary-400 flex items-start gap-1">
+                                                <i class="bi bi-info-circle flex-shrink-0 mt-0.5"></i>
+                                                <span>Export to Google Maps, Apple Maps, or save for offline use</span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Empty State -->
+                                    <div id="routeEmpty" class="text-center py-8">
+                                        <div class="flex items-center justify-center w-16 h-16 mx-auto mb-3 bg-secondary-100 dark:bg-secondary-800 rounded-full">
+                                            <i class="bi bi-compass text-3xl text-secondary-400"></i>
+                                        </div>
+                                        <p class="text-sm text-secondary-600 dark:text-secondary-400">Calculate a route to see results</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- API Quota Widget -->
+                            <div class="vp-card">
+                                <div class="vp-card-header">
+                                    <h3 class="vp-card-title">
+                                        <i class="bi bi-speedometer2 text-info-600 dark:text-info-400"></i>
+                                        <span class="text-xs">API Quota Status</span>
+                                    </h3>
+                                </div>
+                                <div class="vp-card-body">
+                                    <div class="mb-2">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <span class="text-xs font-medium text-secondary-700 dark:text-secondary-300">Usage</span>
+                                            <span class="text-xs font-bold text-secondary-900 dark:text-white">
+                                                <span id="quotaUsed">0</span> / <span id="quotaTotal">333</span>
+                                                (<span id="quotaPercent">0</span>)
+                                            </span>
+                                        </div>
+                                        <div class="w-full bg-secondary-200 dark:bg-secondary-700 rounded-full h-2.5 overflow-hidden">
+                                            <div id="quotaBar" 
+                                                 class="h-full bg-gradient-to-r from-info-500 to-info-600 transition-all duration-300" 
+                                                 role="progressbar"
+                                                 style="width: 0%" 
+                                                 aria-valuenow="0" 
+                                                 aria-valuemin="0" 
+                                                 aria-valuemax="100">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-between text-xs text-secondary-500 dark:text-secondary-400">
+                                        <p class="flex items-center gap-1">
+                                            <i class="bi bi-clock"></i>
+                                            <span>Daily calls</span>
+                                        </p>
+                                        <p class="flex items-center gap-1">
+                                            <i class="bi bi-lightning-charge"></i>
+                                            <span>Cache: <span id="cacheHitRate">0</span></span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Voter List Section - Under the Map -->
+                    <div class="mt-6">
+                        <div class="vp-card">
+                            <div class="vp-card-header bg-secondary-600 text-white flex justify-between items-center">
+                                <span class="flex items-center gap-2">
+                                    <i class="bi bi-people-fill" aria-hidden="true"></i> Voter List
+                                </span>
+                                <div class="flex gap-2">
+                                    <span class="px-2 py-1 bg-primary-500 text-white rounded text-xs font-medium" id="voterSelectionCount" style="display: none;">0 selected</span>
+                                    <span class="px-2 py-1 bg-white text-secondary-700 rounded text-xs font-medium" id="voterListCount">0 voters</span>
+                                </div>
+                            </div>
+                            <div class="vp-card-body p-0">
+                                <div class="overflow-x-auto" style="max-height: 500px; overflow-y: auto;">
+                                    <table class="w-full divide-y divide-secondary-200 dark:divide-secondary-700" id="voterTable">
+                                        <thead class="sticky top-0 bg-secondary-100 dark:bg-secondary-800 text-secondary-900 dark:text-white text-sm">
+                                            <tr>
+                                                <th scope="col" class="px-4 py-3 text-left font-semibold" data-sortable="true" data-column="lastName" aria-sort="none">Name</th>
+                                                <th scope="col" class="px-4 py-3 text-left font-semibold" data-sortable="true" data-column="address" aria-sort="none">Address</th>
+                                                <th scope="col" class="px-4 py-3 text-left font-semibold" data-sortable="true" data-column="mostRecentParty" aria-sort="none">Party</th>
+                                                <th scope="col" class="px-4 py-3 text-left font-semibold" data-sortable="true" data-column="precinctNumber" aria-sort="none">Precinct</th>
+                                                <th scope="col" class="px-4 py-3 text-left font-semibold" data-sortable="true" data-column="superVoter" aria-sort="none">Status</th>
+                                                <th scope="col" class="px-4 py-3 text-left font-semibold" data-sortable="true" data-column="participationRate" aria-sort="none">Participation</th>
+                                                <th scope="col" class="px-4 py-3 text-left font-semibold">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="voterTableBody" class="divide-y divide-secondary-200 dark:divide-secondary-700">
+                                            <tr>
+                                                <td colspan="7" class="text-center text-secondary-500 dark:text-secondary-400 py-8">
+                                                    <div class="animate-spin inline-block w-6 h-6 border-2 border-current border-t-transparent rounded-full mb-2" role="status">
+                                                        <span class="sr-only">Loading...</span>
+                                                    </div>
+                                                    <p>Loading voters...</p>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <!-- Voter List Pagination -->
+                            <div class="px-4 py-3 bg-secondary-100 dark:bg-secondary-800 border-t border-secondary-200 dark:border-secondary-700">
+                                <div class="flex flex-wrap items-center justify-between gap-4">
+                                    <div class="text-sm">
+                                        <span class="text-secondary-600 dark:text-secondary-400">
+                                            Showing <span id="voterShowingStart">0</span> to
+                                            <span id="voterShowingEnd">0</span> of
+                                            <span id="voterShowingTotal">0</span> voters
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-4">
+                                        <select class="px-3 py-1.5 text-sm border border-secondary-300 dark:border-secondary-600 rounded-md focus:ring-2 focus:ring-primary-500 bg-white dark:bg-secondary-700 text-secondary-900 dark:text-secondary-100"
+                                                id="voterPageSize"
+                                                aria-label="Select number of voters per page">
+                                            <option value="25">25 per page</option>
+                                            <option value="50">50 per page</option>
+                                            <option value="100" selected>100 per page</option>
+                                            <option value="200">200 per page</option>
+                                            <option value="500">500 per page</option>
+                                        </select>
+                                        <nav aria-label="Voter list pagination">
+                                            <div class="flex items-center gap-1" id="voterListPagination" role="navigation">
+                                                <button class="px-3 py-1.5 text-sm font-medium text-secondary-600 dark:text-secondary-300 bg-white dark:bg-secondary-700 border border-secondary-300 dark:border-secondary-600 rounded-l-md hover:bg-secondary-50 dark:hover:bg-secondary-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1" disabled aria-label="Go to previous page">
+                                                    <i class="bi bi-chevron-left" aria-hidden="true"></i> Previous
+                                                </button>
+                                                <button class="px-3 py-1.5 text-sm font-medium text-secondary-600 dark:text-secondary-300 bg-white dark:bg-secondary-700 border border-secondary-300 dark:border-secondary-600 rounded-r-md hover:bg-secondary-50 dark:hover:bg-secondary-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1" disabled aria-label="Go to next page">
+                                                    Next <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                                                </button>
+                                            </div>
+                                        </nav>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            <!-- Analytics Tab -->
+            <div class="tab-pane fade" id="analytics-tab" role="tabpanel" aria-labelledby="analytics-tab-btn">
+                <!-- Analytics Dashboard -->
+                <div class="space-y-6">
+                    <!-- Stats Cards Grid -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                        <!-- Total Voters Card -->
+                        <div class="vp-stats-card">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <p class="text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
+                                        Total Voters
+                                    </p>
+                                    <p class="mt-2 text-3xl font-bold text-secondary-900 dark:text-white" id="statTotalVoters">0</p>
+                                </div>
+                                <div class="flex items-center justify-center w-12 h-12 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
+                                    <i class="bi bi-people-fill text-xl text-primary-600 dark:text-primary-400"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Super Voters Card -->
+                        <div class="vp-stats-card">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <p class="text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
+                                        Super Voters
+                                    </p>
+                                    <p class="mt-2 text-3xl font-bold text-secondary-900 dark:text-white" id="statSuperVoters">0</p>
+                                </div>
+                                <div class="flex items-center justify-center w-12 h-12 bg-success-100 dark:bg-success-900/30 rounded-lg">
+                                    <i class="bi bi-star-fill text-xl text-success-600 dark:text-success-400"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Precincts Card -->
+                        <div class="vp-stats-card">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <p class="text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
+                                        Precincts
+                                    </p>
+                                    <p class="mt-2 text-3xl font-bold text-secondary-900 dark:text-white" id="statPrecincts">0</p>
+                                </div>
+                                <div class="flex items-center justify-center w-12 h-12 bg-info-100 dark:bg-info-900/30 rounded-lg">
+                                    <i class="bi bi-pin-map-fill text-xl text-info-600 dark:text-info-400"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Geocoding Progress Card -->
+                        <div class="vp-stats-card">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <p class="text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
+                                        Geocoded
+                                    </p>
+                                    <p class="mt-2 text-3xl font-bold text-secondary-900 dark:text-white" id="statGeocoded">0%</p>
+                                </div>
+                                <div class="flex items-center justify-center w-12 h-12 bg-warning-100 dark:bg-warning-900/30 rounded-lg">
+                                    <i class="bi bi-geo-alt-fill text-xl text-warning-600 dark:text-warning-400"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Charts Section -->
+                    <div class="vp-card">
+                        <div class="vp-card-header">
+                            <h3 class="vp-card-title">
+                                <i class="bi bi-bar-chart text-primary-600 dark:text-primary-400"></i>
+                                <span>Analytics Dashboard</span>
+                            </h3>
+                        </div>
+                        <div class="vp-card-body space-y-6">
+                            <!-- Top Row Charts -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <h4 class="text-sm font-semibold text-secondary-700 dark:text-secondary-300 mb-3">Voters by Precinct</h4>
+                                    <div class="chart-container" style="position: relative; height: 300px;">
+                                        <canvas id="precinctChart" 
+                                                role="img" 
+                                                aria-label="Donut chart showing voter distribution across precincts in Obion County"></canvas>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-semibold text-secondary-700 dark:text-secondary-300 mb-3">Super Voter Distribution</h4>
+                                    <div class="chart-container" style="position: relative; height: 300px;">
+                                        <canvas id="superVoterChart" 
+                                                role="img" 
+                                                aria-label="Pie chart comparing super voters to regular voters"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Age Demographics Chart -->
+                            <div>
+                                <h4 class="text-sm font-semibold text-secondary-700 dark:text-secondary-300 mb-3">Age Demographics</h4>
+                                <div class="chart-container" style="position: relative; height: 350px;">
+                                    <canvas id="ageDemographicsChart" 
+                                            role="img" 
+                                            aria-label="Horizontal bar chart showing voter distribution across age groups, with super voter rates ranging from 5.88% for ages 18-24 to 52.01% for ages 75 and above"
+                                            tabindex="0"></canvas>
+                                </div>
+                            </div>
+                            
+                            <!-- Additional Analytics Charts -->
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div>
+                                    <h4 class="text-sm font-semibold text-secondary-700 dark:text-secondary-300 mb-3">Party Affiliation</h4>
+                                    <div class="chart-container" style="position: relative; height: 300px;">
+                                        <canvas id="partyAffiliationChart" 
+                                                role="img" 
+                                                aria-label="Doughnut chart showing party affiliation distribution among registered voters"
+                                                tabindex="0"></canvas>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-semibold text-secondary-700 dark:text-secondary-300 mb-3">Early Voting Trends</h4>
+                                    <div class="chart-container" style="position: relative; height: 300px;">
+                                        <canvas id="earlyVotingChart" 
+                                                role="img" 
+                                                aria-label="Stacked bar chart showing early voting trends across elections"
+                                                tabindex="0"></canvas>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-semibold text-secondary-700 dark:text-secondary-300 mb-3">Turnout by Precinct</h4>
+                                    <div class="chart-container" style="position: relative; height: 300px;">
+                                        <canvas id="turnoutByPrecinctChart" 
+                                                role="img" 
+                                                aria-label="Horizontal bar chart showing voter turnout rates by precinct"
+                                                tabindex="0"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                                    <!-- Color Legend for Turnout Chart - 5 performance levels -->
+                                    <!-- Fixed: Replaced gray with secondary -->
+                                    <div class="chart-legend text-small text-secondary-500 dark:text-secondary-400 mt-2 text-center">
+                                        <small>
+                                            Turnout Rate: 
+                                            <span class="fw-bold" style="color: #198754;">■ Excellent ≥70%</span>
+                                            <span class="fw-bold" style="color: #20c997;">■ Good 60-69%</span>
+                                            <span class="fw-bold" style="color: #0dcaf0;">■ Average 50-59%</span>
+                                            <span class="fw-bold" style="color: #ffc107;">■ Below 40-49%</span>
+                                            <span class="fw-bold" style="color: #dc3545;">■ Low &lt;40%</span>
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- CRITICAL FIX #1: Non-Voter Analytics Charts -->
+                            <!-- Added three canvas elements for non-voter analytics features -->
+                            <div class="flex flex-wrap -mx-2 mt-3">
+                                <!-- Voter Engagement Levels Chart -->
+                                <div class="w-full md:w-1/3 px-2 mb-3">
+                                    <div class="chart-container" style="position: relative; height: 300px;">
+                                        <canvas id="voterEngagementChart" 
+                                                role="img" 
+                                                aria-label="Doughnut chart showing voter engagement levels: never voted, occasional voters, and super voters"
+                                                tabindex="0"></canvas>
+                                    </div>
+                                </div>
+                                
+                                <!-- Non-Voters by Age Chart -->
+                                <div class="w-full md:w-2/3 px-2 mb-3">
+                                    <div class="chart-container" style="position: relative; height: 350px;">
+                                        <canvas id="nonVoterAgeChart" 
+                                                role="img" 
+                                                aria-label="Dual-axis chart showing non-voter demographics by age group with counts and percentages"
+                                                tabindex="0"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Non-Voters by Precinct Chart -->
+                            <div class="flex flex-wrap -mx-2 mt-3">
+                                <div class="w-full px-2 mb-3">
+                                    <div class="chart-container" style="position: relative; height: 400px;">
+                                        <canvas id="nonVoterPrecinctChart" 
+                                                role="img" 
+                                                aria-label="Horizontal bar chart showing non-voters by precinct with priority levels"
+                                                tabindex="0"></canvas>
+                                    </div>
+                                    <!-- Color legend for severity levels -->
+                                    <div class="chart-legend text-small text-secondary-500 dark:text-secondary-400 mt-2 text-center">
+                                        <small>
+                                            Priority Level: 
+                                            <span class="fw-bold" style="color: #dc3545;">■ Critical ≥80%</span>
+                                            <span class="fw-bold" style="color: #fd7e14;">■ High 60-79%</span>
+                                            <span class="fw-bold" style="color: #ffc107;">■ Medium 40-59%</span>
+                                            <span class="fw-bold" style="color: #198754;">■ Low &lt;40%</span>
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Turnout Trend & Election Comparison Charts -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-3">
+                                <div>
+                                    <h4 class="text-sm font-semibold text-secondary-700 dark:text-secondary-300 mb-3">Turnout Trend</h4>
+                                    <div class="chart-container" style="position: relative; height: 300px;">
+                                        <canvas id="turnoutTrendChart" 
+                                                role="img" 
+                                                aria-label="Line chart showing voter turnout percentage trend across elections"
+                                                tabindex="0"></canvas>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-semibold text-secondary-700 dark:text-secondary-300 mb-3">Election Comparison</h4>
+                                    <div class="chart-container" style="position: relative; height: 300px;">
+                                        <canvas id="electionComparisonChart" 
+                                                role="img" 
+                                                aria-label="Grouped bar chart comparing metrics between elections"
+                                                tabindex="0"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- CRITICAL FIX #2: Target List Section -->
+                    <!-- Added complete target list section for never-voted voters -->
+                    <div class="vp-card mb-3" id="targetListSection">
+                        <div class="vp-card-header bg-secondary-600 text-white flex justify-between align-items-center">
+                            <span><i class="bi bi-people"></i> Never-Voted Voters Target List</span>
+                            <!-- Fixed: Replaced gray with secondary -->
+                            <span class="px-2 py-1 bg-white text-secondary-700 rounded text-xs font-medium" id="targetListCount">0 voters</span>
+                        </div>
+                        <div class="vp-card-body">
+                            <!-- Filters flex flex-wrap -mx-2 -->
+                            <div class="flex flex-wrap -mx-2 mb-3">
+                                <div class="w-full md:w-1/6 px-2">
+                                    <!-- Fixed: Removed duplicate text-sm, replaced gray with secondary -->
+                                    <label for="targetAgeFilter" class="block text-sm font-bold text-secondary-700 dark:text-secondary-300 mb-1">Age Range</label>
+                                    <select class="block w-full px-3 py-2 border border-secondary-300 dark:border-secondary-600 rounded-md focus:ring-2 focus:ring-primary-500 bg-white dark:bg-secondary-800 text-secondary-900 dark:text-secondary-100 form-select-sm" id="targetAgeFilter" aria-label="Filter target list by age range">
+                                        <option value="18-120" selected>All Ages</option>
+                                        <option value="18-24">18-24</option>
+                                        <option value="25-34">25-34</option>
+                                        <option value="35-44">35-44</option>
+                                        <option value="45-54">45-54</option>
+                                        <option value="55-64">55-64</option>
+                                        <option value="65-74">65-74</option>
+                                        <option value="75-120">75+</option>
+                                    </select>
+                                </div>
+                                <div class="w-full md:w-1/6 px-2">
+                                    <!-- Fixed: Removed duplicate text-sm, replaced gray with secondary -->
+                                    <label for="targetPrecinctFilter" class="block text-sm font-bold text-secondary-700 dark:text-secondary-300 mb-1">Precinct</label>
+                                    <select class="block w-full px-3 py-2 border border-secondary-300 dark:border-secondary-600 rounded-md focus:ring-2 focus:ring-primary-500 bg-white dark:bg-secondary-800 text-secondary-900 dark:text-secondary-100 form-select-sm" id="targetPrecinctFilter" multiple size="1" aria-label="Filter target list by precinct">
+                                        <option value="">All Precincts</option>
+                                    </select>
+                                </div>
+                                <div class="w-full md:w-1/6 px-2">
+                                    <!-- Fixed: Removed duplicate text-sm, replaced gray with secondary -->
+                                    <label for="targetCityFilter" class="block text-sm font-bold text-secondary-700 dark:text-secondary-300 mb-1">City</label>
+                                    <select class="block w-full px-3 py-2 border border-secondary-300 dark:border-secondary-600 rounded-md focus:ring-2 focus:ring-primary-500 bg-white dark:bg-secondary-800 text-secondary-900 dark:text-secondary-100 form-select-sm" id="targetCityFilter" multiple size="1" aria-label="Filter target list by city">
+                                        <option value="">All Cities</option>
+                                    </select>
+                                </div>
+                                <div class="w-full md:w-1/6 px-2">
+                                    <!-- Fixed: Removed duplicate text-sm, replaced gray with secondary -->
+                                    <label class="block text-sm font-bold text-secondary-700 dark:text-secondary-300 mb-1">Filters</label>
+                                    <div class="flex items-center">
+                                        <input class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded" type="checkbox" id="targetGeocodedFilter">
+                                        <label class="ml-2 block text-sm text-secondary-900 dark:text-secondary-100" for="targetGeocodedFilter">
+                                            Geocoded Only
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="w-full md:w-1/4 px-2">
+                                    <!-- Fixed: Removed duplicate text-sm, replaced gray with secondary -->
+                                    <label for="targetSearchInput" class="block text-sm font-bold text-secondary-700 dark:text-secondary-300 mb-1">Search</label>
+                                    <input type="text" class="block w-full px-3 py-2 border border-secondary-300 dark:border-secondary-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-secondary-800 text-secondary-900 dark:text-secondary-100 form-control-sm" id="targetSearchInput" 
+                                           placeholder="Name or address..." aria-label="Search target list by name or address">
+                                </div>
+                                <div class="col-md-1">
+                                    <!-- Fixed: Removed duplicate text-sm, replaced gray with secondary -->
+                                    <label class="block text-sm font-bold text-secondary-700 dark:text-secondary-300 mb-1">&nbsp;</label>
+                                    <button class="btn-success text-xs w-full" id="exportTargetListBtn" aria-label="Export target list to CSV">
+                                        <i class="bi bi-download"></i> CSV
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Results -->
+                            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                                <table class="w-full divide-y divide-secondary-200 dark:divide-secondary-700 table-sm table-hover table-striped mb-0">
+                                    <thead class="sticky top-0 bg-secondary-100 dark:bg-secondary-800 text-secondary-900 dark:text-white">
+                                        <tr>
+                                            <th scope="col" class="sortable" data-sort="lastName">Name <i class="bi bi-arrow-down-up"></i></th>
+                                            <th scope="col" class="sortable" data-sort="age">Age <i class="bi bi-arrow-down-up"></i></th>
+                                            <th scope="col">Address</th>
+                                            <th scope="col" class="sortable" data-sort="city">City <i class="bi bi-arrow-down-up"></i></th>
+                                            <th scope="col" class="sortable" data-sort="precinct">Precinct <i class="bi bi-arrow-down-up"></i></th>
+                                            <th scope="col">Zip</th>
+                                            <th scope="col" class="text-center">Geocoded</th>
+                                            <th scope="col">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="targetTableBody">
+                                        <tr>
+                                            <td colspan="8" class="text-center text-secondary-500 dark:text-secondary-400 py-4">
+                                                <div class="spinner-border spinner-border-sm" role="status">
+                                                    <span class="visually-hidden">Loading...</span>
+                                                </div>
+                                                <p class="mt-2">Loading target list...</p>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Pagination -->
+                            <div class="flex flex-wrap -mx-2 mt-3">
+                                <div class="w-full md:w-1/2 px-2">
+                                    <small class="text-secondary-600 dark:text-secondary-400">
+                                        Showing <span id="showingStart">0</span> to <span id="showingEnd">0</span> 
+                                        of <span id="showingTotal">0</span> voters
+                                    </small>
+                                </div>
+                                <div class="w-full md:w-1/2 px-2">
+                                    <nav aria-label="Target list pagination">
+                                        <ul class="pagination pagination-sm justify-content-end mb-0" id="targetListPagination">
+                                            <li class="page-item disabled">
+                                                <a class="page-link" href="#" aria-label="Previous page">Previous</a>
+                                            </li>
+                                            <li class="page-item disabled">
+                                                <a class="page-link" href="#" aria-label="Next page">Next</a>
+                                            </li>
+                                        </ul>
+                                    </nav>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- End Tab Content -->
+        </div>
+
+        <!-- Mobile Offcanvas Filter Panel (loaded dynamically) -->
+        <div id="filter-offcanvas-container"></div>
+
+        <!-- Loading Overlay -->
+        <!-- CRITICAL FIX #3: Added aria-live and aria-busy for loading state -->
+        <div id="loading-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 9999; align-items: center; justify-content: center;"
+             role="alert" aria-live="assertive" aria-busy="true">
+            <div class="spinner-border text-light" role="status" style="width: 3rem; height: 3rem;">
+                <span class="visually-hidden">Loading voter data...</span>
+            </div>
+        </div>
+
+        <!-- Toast Container -->
+        <!-- CRITICAL FIX #3: Toast notifications use role="alert" by default in Bootstrap -->
+        <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toast-container" aria-live="polite"></div>
+        
+        <!-- Upload Modal (loaded dynamically) -->
+        <div id="upload-modal-container"></div>
+        
+        <!-- Voter Detail Modal (loaded dynamically) -->
+        <div id="voter-detail-container"></div>
+        
+        <!-- Error Details Modal -->
+        <div class="modal fade" id="errorDetailsModal" tabindex="-1"
+             aria-labelledby="errorDetailsModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="errorDetailsModalLabel">Import Errors</h5>
+                        <button type="button" class="btn-close" 
+                                data-bs-dismiss="modal"
+                                aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="errorDetailsList"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-primary" 
+                                id="downloadErrorsBtn">
+                            <i class="bi bi-download"></i> Download Error Report
+                        </button>
+                        <button type="button" class="btn-secondary" 
+                                data-bs-dismiss="modal">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Route Voter Selection Modal - Converted to Tailwind -->
+        <div class="fixed inset-0 z-50 hidden items-center justify-center transition-opacity duration-300" 
+             id="routeVoterSelectionModal" 
+             tabindex="-1" 
+             aria-labelledby="routeVoterSelectionModalLabel" 
+             aria-hidden="true">
+            <div class="bg-white dark:bg-secondary-800 rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between px-6 py-4 bg-primary-600 text-white rounded-t-lg">
+                    <h5 class="text-lg font-semibold flex items-center gap-2" id="routeVoterSelectionModalLabel">
+                        <i class="bi bi-people"></i> 
+                        <span>Select Voters for Route</span>
+                    </h5>
+                    <div class="flex items-center gap-3">
+                        <span class="px-3 py-1 bg-white text-primary-700 rounded-md text-sm font-semibold" id="modalSelectionCount">
+                            0 / 50
+                        </span>
+                        <button type="button" 
+                                class="text-white hover:text-primary-100 transition-colors" 
+                                data-bs-dismiss="modal" 
+                                aria-label="Close">
+                            <i class="bi bi-x-lg text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Modal Body -->
+                <div class="flex-1 overflow-hidden flex flex-col">
+                    <!-- Search and Filter Bar -->
+                    <div class="px-6 py-4 bg-secondary-50 dark:bg-secondary-900 border-b border-secondary-200 dark:border-secondary-700">
+                        <!-- Search Input -->
+                        <div class="relative mb-3">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary-400">
+                                <i class="bi bi-search"></i>
+                            </span>
+                            <input type="text" 
+                                   class="w-full pl-10 pr-4 py-2 border border-secondary-300 dark:border-secondary-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-secondary-800 text-secondary-900 dark:text-secondary-100" 
+                                   id="voterSelectionSearchInput" 
+                                   placeholder="Search by name, address, precinct..."
+                                   autocomplete="off"
+                                   aria-label="Search voters">
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="grid grid-cols-3 gap-2" role="group" aria-label="Voter selection actions">
+                            <button type="button" class="btn-secondary btn-sm justify-center" id="selectAllVisibleBtn">
+                                <i class="bi bi-check-square"></i> 
+                                <span>Select All</span>
+                            </button>
+                            <button type="button" class="btn-success btn-sm justify-center" id="selectSupersOnlyBtn">
+                                <i class="bi bi-star"></i> 
+                                <span>Super Voters</span>
+                            </button>
+                            <button type="button" class="btn-ghost btn-sm justify-center text-danger-600 hover:bg-danger-50" id="clearModalSelectionBtn">
+                                <i class="bi bi-x-square"></i> 
+                                <span>Clear All</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Voter List with Checkboxes -->
+                    <div class="flex-1 overflow-y-auto">
+                        <ul class="divide-y divide-secondary-200 dark:divide-secondary-700" id="voterSelectionList">
+                            <!-- Dynamically populated -->
+                            <li class="px-6 py-4 text-center text-secondary-500 dark:text-secondary-400">
+                                <div class="inline-block animate-spin w-5 h-5 border-2 border-current border-t-transparent rounded-full" role="status">
+                                    <span class="sr-only">Loading...</span>
+                                </div>
+                                <p class="mt-2">Loading voters...</p>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Modal Footer -->
+                <div class="px-6 py-4 bg-secondary-50 dark:bg-secondary-900 border-t border-secondary-200 dark:border-secondary-700 rounded-b-lg flex items-center justify-end gap-3">
+                    <button type="button" class="btn-secondary" data-bs-dismiss="modal">
+                        Cancel
+                    </button>
+                    <button type="button" class="btn-primary" id="confirmVoterSelectionBtn">
+                        <i class="bi bi-check-lg"></i> 
+                        Confirm Selection (<span id="confirmSelectionCount">0</span>)
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        
+        <!-- Footer -->
+        <footer class="bg-secondary-100 dark:bg-secondary-800 text-center text-secondary-600 dark:text-secondary-400 py-4 mt-4 border-t border-secondary-200 dark:border-secondary-700">
+            <div class="w-full px-4 md:px-6">
+                <small>
+                    Voter Outreach Platform &copy; 2026 | Obion County Election Commission<br>
+                    <span id="app-version">v4.0</span> | 
+                    <a href="#" class="text-primary-600 dark:text-primary-400 hover:underline">Documentation</a> | 
+                    <a href="#" class="text-primary-600 dark:text-primary-400 hover:underline">Support</a>
+                </small>
+            </div>
+        </footer>
+    </div>
+    
+    <!-- Logger - Must load FIRST before any scripts that use it -->
+    <script src="/js/logger.js?v=20260215"></script>
+    
+    <!-- Global Error Handler - Catch all JavaScript errors -->
+    <script>
+        window.onerror = function(message, source, lineno, colno, error) {
+            Logger.error('GLOBAL ERROR:', message);
+            Logger.error('Source:', source, 'Line:', lineno, 'Col:', colno);
+            if (error && error.stack) Logger.error('Stack:', error.stack);
+            return false;
+        };
+        window.addEventListener('unhandledrejection', function(event) {
+            Logger.error('UNHANDLED PROMISE REJECTION:', event.reason);
+        });
+        Logger.info('Global error handlers installed');
+    </script>
+    
+    <!-- UI Components - Vanilla JS replacements for Bootstrap components -->
+    <script src="/js/ui-components.js?v=20260215"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- CRITICAL FIX #1: Google Maps API Key Configuration -->
+    <!-- 
+        ⚠️ IMPORTANT: Google Maps API Key Setup Required
+        
+        To enable the interactive map features, you must:
+        
+        1. Obtain a Google Maps JavaScript API key:
+           - Go to: https://console.cloud.google.com/
+           - Create a new project or select existing project
+           - Enable "Maps JavaScript API"
+           - Create credentials (API key)
+        
+        2. Secure your API key:
+           - Add HTTP referrer restrictions in Google Cloud Console
+           - Restrict to your domain: https://yourdomain.com/*
+           - For local development: http://localhost:*
+        
+        3. Replace YOUR_API_KEY below with your actual API key:
+           - For production: Use environment variable and build process
+           - For development: Replace directly (DO NOT commit to version control)
+        
+        4. Optional: Add to .env file and use build tool to inject:
+           GOOGLE_MAPS_API_KEY=your_key_here
+        
+        Without a valid API key, the map will display an error.
+    -->
+    <script>
+        // Google Maps API loaded dynamically from backend configuration
+        // This allows the API key to be stored securely in .env file
+        window.gm_authFailure = function() {
+            Logger.error('Google Maps API Key Error: Invalid or missing API key');
+            const mapElement = document.getElementById('map');
+            if (mapElement) {
+                mapElement.innerHTML = `
+                    <div style="display: flex; align-items: center; justify-content: center; height: 100%; background: #f8f9fa; padding: 20px; text-align: center;">
+                        <div>
+                            <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                            <h4 class="mt-3">Google Maps Configuration Required</h4>
+                            <p class="text-muted">The Google Maps API key is missing or invalid.</p>
+                            <p class="small">Please configure GOOGLE_MAPS_API_KEY in your .env file.</p>
+                            <a href="https://developers.google.com/maps/documentation/javascript/get-api-key" 
+                               class="btn-primary text-xs" target="_blank" rel="noopener noreferrer">
+                                Get API Key
+                            </a>
+                        </div>
+                    </div>
+                `;
+            }
+        };
+    </script>
+    
+    <!-- Google Maps script is loaded dynamically by app.js using API key from .env -->
+    
+    <!-- Google Maps Marker Clusterer -->
+    <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
+    
+    <!-- Keyboard Controller - Phase 3: Layout & Navigation -->
+    <script src="/js/keyboard-controller.js?v=20260215"></script>
+    
+    <!-- Toast Controller - Phase 4: Enhanced Interactivity -->
+    <script src="/js/toast-controller.js?v=20260215"></script>
+    
+    <!-- Configuration Module - Load FIRST -->
+    <script src="/js/config.js?v=20260215"></script>
+    
+    <!-- Theme Controller - Phase 1: Design System -->
+    <script src="/js/theme-controller.js?v=20260215"></script>
+    
+    <!-- Custom Application JavaScript Modules -->
+    <script src="/js/utils.js?v=20260215"></script>
+    <script src="/js/state-manager.js?v=20260215"></script>
+    <script src="/js/voter-service.js?v=20260215"></script>
+    <script src="/js/upload-service.js?v=20260215"></script>
+    <script src="/js/template-loader.js?v=20260215"></script>
+    <script src="/js/upload-controller.js?v=20260215"></script>
+    <script src="/js/map-controller.js?v=20260215"></script>
+    <script src="/js/filter-controller.js?v=20260215"></script>
+    <script src="/js/virtual-scroller.js?v=20260215"></script>
+    <script src="/js/voter-list-controller.js?v=20260215"></script>
+    <script src="/js/chart-controller.js?v=20260215-fix1"></script>
+    <script src="/js/target-list-controller.js?v=20260215"></script>
+    <script src="/js/route-planner-controller.js?v=20260215-supervoter-fix"></script>
+    <script src="/js/app.js?v=20260215"></script>
+    
+    <!-- Initialize application with configuration -->
+    <script>
+        // Ensure configuration is loaded before app starts
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Load configuration from backend
+            await loadAppConfig();
+            
+            // Load template partials (modals, offcanvas panels)
+            await TemplateLoader.loadAll();
+            
+            // Update dynamic UI elements (location badge, footer, version)
+            updateDynamicUIElements();
+            
+            // App will initialize automatically via existing DOMContentLoaded in app.js
+        });
+    </script>
+
+    <!-- Service Worker Registration -->
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').catch(err => Logger.warn('SW registration failed:', err));
+        });
+    }
+    </script>
+</body>
+</html>

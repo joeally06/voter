@@ -1,0 +1,74 @@
+<!-- Voter Detail Modal Template -->
+<div class="fixed inset-0 z-50 hidden items-center justify-center transition-opacity duration-300" id="voterDetailModal" tabindex="-1" 
+     aria-labelledby="voterDetailModalLabel" aria-hidden="true">
+    <div class="bg-white dark:bg-secondary-800 rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-secondary-200 dark:border-secondary-700">
+            <h5 class="text-lg font-semibold text-secondary-900 dark:text-white" id="voterDetailModalLabel">Voter Details</h5>
+            <button type="button" class="text-secondary-400 hover:text-secondary-600 dark:hover:text-secondary-300" data-bs-dismiss="modal" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="px-6 py-4">
+                <!-- Voter Info -->
+                <div class="flex flex-wrap -mx-2 mb-4">
+                    <div class="w-full md:w-1/2 px-2">
+                        <h6>Personal Information</h6>
+                        <dl class="flex flex-wrap -mx-2">
+                            <dt class="col-sm-4">Name:</dt>
+                            <dd class="col-sm-8" id="detailName">-</dd>
+                            
+                            <dt class="col-sm-4">Voter ID:</dt>
+                            <dd class="col-sm-8" id="detailVoterId">-</dd>
+                            
+                            <dt class="col-sm-4">Address:</dt>
+                            <dd class="col-sm-8" id="detailAddress">-</dd>
+                            
+                            <dt class="col-sm-4">City, ZIP:</dt>
+                            <dd class="col-sm-8" id="detailCityZip">-</dd>
+                        </dl>
+                    </div>
+                    <div class="w-full md:w-1/2 px-2">
+                        <h6>Voting Information</h6>
+                        <dl class="flex flex-wrap -mx-2">
+                            <dt class="col-sm-5">Precinct:</dt>
+                            <dd class="col-sm-7" id="detailPrecinct">-</dd>
+                            
+                            <dt class="col-sm-5">Party:</dt>
+                            <dd class="col-sm-7" id="detailParty">-</dd>
+                            
+                            <dt class="col-sm-5">Super Voter:</dt>
+                            <dd class="col-sm-7" id="detailSuperVoter">-</dd>
+                            
+                            <dt class="col-sm-5">Participation:</dt>
+                            <dd class="col-sm-7" id="detailParticipation">-</dd>
+                            
+                            <dt class="col-sm-5">Geocoded:</dt>
+                            <dd class="col-sm-7" id="detailGeocoded">-</dd>
+                        </dl>
+                    </div>
+                </div>
+                
+                <!-- Election History -->
+                <h6>Election History</h6>
+                <div class="table-responsive">
+                    <table class="w-full divide-y divide-secondary-200 dark:divide-secondary-700 table-sm table-bordered">
+                        <thead class="bg-secondary-100 dark:bg-secondary-800 text-secondary-900 dark:text-white">
+                            <tr>
+                                <th>Election</th>
+                                <th>Voted</th>
+                                <th>Party</th>
+                                <th>Early Vote</th>
+                            </tr>
+                        </thead>
+                        <tbody id="electionHistoryBody">
+                            <tr>
+                                <td colspan="4" class="text-center text-secondary-500 dark:text-secondary-400">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
