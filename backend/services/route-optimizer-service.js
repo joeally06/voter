@@ -15,6 +15,7 @@
  */
 
 const DistanceMatrixService = require('./distance-matrix-service');
+const { SparseDistanceMatrix } = require('./distance-matrix-service');
 
 class RouteOptimizerService {
   constructor() {
@@ -51,8 +52,7 @@ class RouteOptimizerService {
     );
 
     // Check if we're using progressive mode
-    const isProgressive = distanceMatrix instanceof this.distanceMatrixService.constructor.SparseDistanceMatrix ||
-                          distanceMatrix.constructor.name === 'SparseDistanceMatrix';
+    const isProgressive = distanceMatrix instanceof SparseDistanceMatrix;
 
     // Step 2: Generate initial route with nearest neighbor
     let route = await this.nearestNeighborRoute(distanceMatrix, 0);
@@ -118,7 +118,7 @@ class RouteOptimizerService {
     const unvisited = new Set([...Array(n).keys()].filter(i => i !== startIdx));
 
     // Check if using progressive mode
-    const isProgressive = distanceMatrix.prefetchRow !== undefined;
+    const isProgressive = distanceMatrix instanceof SparseDistanceMatrix;
 
     while (unvisited.size > 0) {
       const current = route[route.length - 1];
@@ -178,7 +178,7 @@ class RouteOptimizerService {
     let currentRoute = [...route];
 
     // Check if using progressive mode
-    const isProgressive = distanceMatrix.get !== undefined;
+    const isProgressive = distanceMatrix instanceof SparseDistanceMatrix;
 
     while (improved && iteration < maxIterations) {
       improved = false;
@@ -275,7 +275,7 @@ class RouteOptimizerService {
    */
   async calculateRouteDistance(route, distanceMatrix) {
     let totalDistance = 0;
-    const isProgressive = distanceMatrix.get !== undefined;
+    const isProgressive = distanceMatrix instanceof SparseDistanceMatrix;
 
     for (let i = 0; i < route.length - 1; i++) {
       const from = route[i];
@@ -300,7 +300,7 @@ class RouteOptimizerService {
    */
   async calculateRouteDuration(route, distanceMatrix) {
     let totalDuration = 0;
-    const isProgressive = distanceMatrix.get !== undefined;
+    const isProgressive = distanceMatrix instanceof SparseDistanceMatrix;
 
     for (let i = 0; i < route.length - 1; i++) {
       const from = route[i];

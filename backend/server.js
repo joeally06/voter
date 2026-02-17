@@ -17,7 +17,52 @@ const compression = require('compression');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const { validationResult } = require('express-validator');
-require('dotenv').config();
+
+// FIX: Load .env file from explicit path instead of relying on current working directory
+// This ensures environment variables are loaded correctly regardless of where node is started from
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
+// Environment-aware logging: suppress verbose output in production
+const isDev = process.env.NODE_ENV !== 'production';
+const log = {
+  info: (...args) => isDev && console.log(...args),
+  warn: (...args) => console.warn(...args),
+  error: (...args) => console.error(...args),
+  always: (...args) => console.log(...args)
+};
+
+// STARTUP VALIDATION: Check working directory and environment
+const projectRoot = path.join(__dirname, '..');
+const expectedPackageJson = path.join(projectRoot, 'package.json');
+
+if (!require('fs').existsSync(expectedPackageJson)) {
+    console.error('❌ CRITICAL: Invalid working directory');
+    console.error('📋 package.json not found at:', expectedPackageJson);
+    console.error('📋 Server must be run from Voter project directory');
+    console.error('🔧 Current directory:', process.cwd());
+    console.error('🔧 Expected directory:', projectRoot);
+    console.error('');
+    console.error('✅ Correct startup command:');
+    console.error('   cd C:\\Voter');
+    console.error('   npm start');
+    console.error('');
+    process.exit(1);
+}
+
+log.info('✅ Working directory validated:', projectRoot);
+
+// STARTUP VALIDATION: Fail fast if critical environment variables are missing
+// This prevents the application from starting in a broken state and makes debugging easier
+const apiKeys = require('./config/api-keys');
+const keyValidation = apiKeys.validate();
+if (!keyValidation.valid) {
+    console.error('❌ CRITICAL: GOOGLE_MAPS_API_KEY not found in environment variables');
+    console.error('📋 Make sure .env file exists in the project root directory (C:\\Voter\\.env)');
+    console.error('📋 The .env file should contain: GOOGLE_MAPS_API_KEY=your_api_key_here');
+    console.error('🛑 Server cannot start without Google Maps API key - exiting...');
+    process.exit(1);
+}
+keyValidation.warnings.forEach(w => console.warn(`⚠️  ${w}`));
 
 const database = require('./config/database');
 
@@ -51,16 +96,31 @@ app.use(compression());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // SECURITY ENHANCEMENT: Rate limiting to prevent API abuse and DoS attacks
-const apiLimiter = rateLimit({
+// Split read vs write: GET requests need higher limits for rapid filter changes
+const apiReadLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per window
+    max: 1000, // Limit each IP to 1000 read requests per window
     message: 'Too many requests from this IP, please try again later.',
     standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
     legacyHeaders: false, // Disable `X-RateLimit-*` headers
 });
 
-// Apply rate limiting to all API routes
-app.use('/api/', apiLimiter);
+const apiWriteLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 write requests per window
+    message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// Apply different rate limits for read vs write operations
+app.use('/api/', (req, res, next) => {
+    if (req.method === 'GET') {
+        apiReadLimiter(req, res, next);
+    } else {
+        apiWriteLimiter(req, res, next);
+    }
+});
 
 // Stricter rate limiting for upload endpoint (potential abuse vector)
 // FIX: Exempt GET requests (status checks) from upload rate limiting to prevent 429 errors during polling
@@ -78,8 +138,21 @@ const uploadLimiter = rateLimit({
 
 app.use('/api/upload', uploadLimiter);
 
-// Static file serving - Frontend files from public directory
-app.use(express.static(path.join(__dirname, '../frontend/public')));
+// Static file serving - Vite-built frontend from frontend/dist
+const frontendDist = path.join(__dirname, '../frontend/dist');
+const frontendFallback = path.join(__dirname, '../frontend/public');
+const servePath = require('fs').existsSync(frontendDist) ? frontendDist : frontendFallback;
+
+app.use(express.static(servePath, {
+    setHeaders: (res, filePath) => {
+        // Vite hashed assets get long cache; everything else gets short cache
+        if (/\.[a-f0-9]{8}\.(js|css)$/.test(filePath)) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+            res.setHeader('Cache-Control', 'no-cache');
+        }
+    }
+}));
 
 // ============================================================================
 // DATABASE INITIALIZATION
@@ -92,7 +165,7 @@ const initializeDatabase = async () => {
     try {
         await database.connect();
         const stats = await database.getStats();
-        console.log('📊 Database Stats:', stats);
+        log.info('📊 Database Stats:', stats);
     } catch (error) {
         console.error('❌ Database initialization failed:', error);
         process.exit(1);
@@ -120,7 +193,7 @@ app.get('/api/config', (req, res) => {
     try {
         const config = {
             // Google Maps Integration
-            googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || '',
+            googleMapsApiKey: apiKeys.mapsApiKey,
             
             // API Configuration (derived from current deployment)
             apiBaseUrl: '/api',
@@ -222,7 +295,7 @@ app.get('/api/health', async (req, res) => {
     try {
         const stats = await database.getStats();
         res.json({
-            status: 'healthy',
+            status: stats ? 'healthy' : 'degraded',
             timestamp: new Date().toISOString(),
             database: stats,
             uptime: process.uptime()
@@ -252,10 +325,26 @@ app.use('/api/routes', require('./routes/routes')); // Phase 5: Route Planning
 // ============================================================================
 
 /**
- * Serve index.html for all non-API routes (SPA support)
+ * API 404 handler — catch ALL methods for unmatched /api/* routes
+ * Must come BEFORE the SPA catch-all to ensure API requests get JSON responses
+ */
+app.all('/api/*', (req, res) => {
+    res.status(404).json({
+        error: 'Not Found',
+        message: `API route ${req.method} ${req.path} not found`,
+        timestamp: new Date().toISOString()
+    });
+});
+
+/**
+ * Serve index.html for all non-API GET routes (SPA support)
+ * Serves from Vite dist/ build if available, otherwise falls back to frontend/public
  */
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/public/index.html'));
+    const distIndex = path.join(__dirname, '../frontend/dist/index.html');
+    const fallbackIndex = path.join(__dirname, '../frontend/public/index.html');
+    const indexPath = require('fs').existsSync(distIndex) ? distIndex : fallbackIndex;
+    res.sendFile(indexPath);
 });
 
 // ============================================================================
@@ -263,7 +352,7 @@ app.get('*', (req, res) => {
 // ============================================================================
 
 /**
- * 404 handler for undefined routes
+ * 404 handler for non-GET requests to non-API routes
  */
 app.use((req, res) => {
     res.status(404).json({
@@ -303,35 +392,199 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================================================
-// SERVER STARTUP
+// GLOBAL ERROR HANDLERS
 // ============================================================================
 
 /**
- * Start the Express server
+ * CRITICAL: Global error handlers for uncaught exceptions and unhandled rejections
+ * These prevent silent failures and ensure proper logging before process termination
+ * Source: Node.js Official Documentation - https://nodejs.org/api/process.html
  */
-const startServer = async () => {
-    await initializeDatabase();
+
+// Handle uncaught exceptions (synchronous errors not caught by try-catch)
+process.on('uncaughtException', (error, origin) => {
+    console.error('='.repeat(80));
+    console.error('💥 FATAL: Uncaught Exception');
+    console.error('Time:', new Date().toISOString());
+    console.error('Origin:', origin);
+    console.error('Error:', error.name);
+    console.error('Message:', error.message);
+    console.error('Stack:', error.stack);
+    console.error('='.repeat(80));
     
-    app.listen(PORT, HOST, () => {
-        console.log(`\n🚀 Server running at http://${HOST}:${PORT}`);
-        console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
-        console.log(`🗺️  Google Maps API: ${process.env.GOOGLE_MAPS_API_KEY ? 'Configured' : 'NOT CONFIGURED'}`);
-        console.log('\n✅ Ready to accept requests\n');
-    });
+    // Attempt cleanup before termination
+    // Per Node.js docs: must exit after uncaughtException (app state is undefined)
+    try {
+        if (database && database.isConnected) {
+            database.close().then(() => {
+                log.always('✅ Database connection closed');
+                process.exit(1);
+            }).catch((cleanupError) => {
+                console.error('❌ Database cleanup failed:', cleanupError);
+                process.exit(1);
+            });
+        } else {
+            process.exit(1);
+        }
+    } catch (cleanupError) {
+        console.error('❌ Cleanup failed:', cleanupError);
+        process.exit(1);
+    }
+});
+
+// Handle unhandled promise rejections (async errors without .catch())
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('='.repeat(80));
+    console.error('⚠️  CRITICAL: Unhandled Promise Rejection');
+    console.error('Time:', new Date().toISOString());
+    console.error('Promise:', promise);
+    console.error('Reason:', reason);
+    if (reason instanceof Error) {
+        console.error('Stack:', reason.stack);
+    }
+    console.error('='.repeat(80));
+    
+    // In Node.js v15+, unhandled rejections will terminate the process
+    // Log with full context for debugging
+    // Consider: In production, send alerts to monitoring service
+});
+
+// Warning handler (useful for detecting deprecated API usage)
+process.on('warning', (warning) => {
+    console.warn('⚠️  Node.js Warning:');
+    console.warn('Name:', warning.name);
+    console.warn('Message:', warning.message);
+    if (warning.stack) {
+        console.warn('Stack:', warning.stack);
+    }
+});
+
+// ============================================================================
+// SERVER STARTUP & SHUTDOWN
+// ============================================================================
+
+// Store server instance globally for graceful shutdown
+let server;
+let isShuttingDown = false;
+
+/**
+ * Graceful shutdown handler
+ * Ensures clean resource cleanup before process termination
+ * Source: Node.js Best Practices - Graceful Shutdown Pattern
+ */
+const gracefulShutdown = async (signal) => {
+    if (isShuttingDown) {
+        log.always('Shutdown already in progress...');
+        return;
+    }
+    
+    isShuttingDown = true;
+    log.always('='.repeat(80));
+    log.always(`🛑 ${signal} received - Starting graceful shutdown`);
+    log.always('='.repeat(80));
+    
+    // 1. Stop accepting new connections
+    if (server) {
+        server.close(() => {
+            log.always('✅ HTTP server closed - no longer accepting connections');
+        });
+    }
+    
+    // 2. Wait for existing requests to complete (with timeout)
+    const shutdownTimeout = setTimeout(() => {
+        console.error('⚠️  Graceful shutdown timeout (10s) - forcing exit');
+        process.exit(1);
+    }, 10000); // 10 second timeout
+    
+    // 3. Close database connections
+    try {
+        if (database && database.isConnected) {
+            await database.close();
+            log.always('✅ Database connection closed');
+        }
+    } catch (error) {
+        console.error('❌ Error closing database:', error);
+    }
+    
+    // 4. Clear shutdown timeout and exit cleanly
+    clearTimeout(shutdownTimeout);
+    log.always('✅ Graceful shutdown complete');
+    log.always('='.repeat(80));
+    process.exit(0);
 };
 
-// Graceful shutdown handler
-process.on('SIGTERM', async () => {
-    console.log('\n🛑 Received SIGTERM signal. Closing server gracefully...');
-    await database.close();
-    process.exit(0);
-});
+/**
+ * Start the Express server with comprehensive error handling
+ * Handles port conflicts (EADDRINUSE) and permission errors (EACCES)
+ */
+const startServer = async () => {
+    try {
+        // Initialize database first
+        await initializeDatabase();
+        
+        // Start HTTP server with error handling
+        server = app.listen(PORT, HOST, () => {
+            log.always(`\n🚀 Server running at http://${HOST}:${PORT}`);
+            log.always(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+            log.always(`🗺️  Google Maps API: ${process.env.GOOGLE_MAPS_API_KEY ? 'Configured' : 'NOT CONFIGURED'}`);
+            log.always('\n✅ Ready to accept requests\n');
+        });
+        
+        // Handle server errors (port conflicts, permission issues)
+        server.on('error', (error) => {
+            if (error.code === 'EADDRINUSE') {
+                console.error('='.repeat(80));
+                console.error('❌ PORT CONFLICT ERROR');
+                console.error(`Port ${PORT} is already in use`);
+                console.error('='.repeat(80));
+                console.error('\n💡 Solutions:');
+                console.error(`1. Kill the process using port ${PORT}:`);
+                console.error('   Windows: Get-Process -Name node | Stop-Process -Force');
+                console.error('   Linux/Mac: killall node');
+                console.error(`2. Change PORT in .env file to a different value`);
+                console.error('3. Find process using port:');
+                console.error(`   Windows: netstat -ano | findstr :${PORT}`);
+                console.error(`   Linux/Mac: lsof -i :${PORT}\n`);
+                console.error('='.repeat(80));
+                process.exit(1);
+            } else if (error.code === 'EACCES') {
+                console.error('='.repeat(80));
+                console.error('❌ PERMISSION ERROR');
+                console.error(`Permission denied to bind to port ${PORT}`);
+                console.error('Ports below 1024 require administrator privileges');
+                console.error('='.repeat(80));
+                process.exit(1);
+            } else {
+                console.error('='.repeat(80));
+                console.error('❌ SERVER ERROR');
+                console.error('Error Code:', error.code);
+                console.error('Error Message:', error.message);
+                console.error('Stack:', error.stack);
+                console.error('='.repeat(80));
+                process.exit(1);
+            }
+        });
+        
+    } catch (error) {
+        console.error('='.repeat(80));
+        console.error('❌ Server startup failed');
+        console.error('Error:', error.message);
+        console.error('Stack:', error.stack);
+        console.error('='.repeat(80));
+        
+        // Cleanup on startup failure
+        try {
+            await database.close();
+        } catch (cleanupError) {
+            console.error('Database cleanup error:', cleanupError);
+        }
+        process.exit(1);
+    }
+};
 
-process.on('SIGINT', async () => {
-    console.log('\n🛑 Received SIGINT signal. Closing server gracefully...');
-    await database.close();
-    process.exit(0);
-});
+// Register shutdown handlers for graceful termination
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Start the server
 startServer();

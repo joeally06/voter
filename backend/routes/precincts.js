@@ -21,7 +21,9 @@ const database = require('../config/database');
 router.get('/', async (req, res, next) => {
     try {
         const precincts = await database.all(
-            'SELECT * FROM precincts ORDER BY precinct_number'
+            `SELECT p.* FROM precincts p
+             WHERE p.precinct_number IN (SELECT DISTINCT precinct_number FROM voters)
+             ORDER BY p.precinct_number`
         );
         
         res.json({
@@ -89,13 +91,10 @@ router.get('/:number', async (req, res, next) => {
  */
 router.get('/:number/voters', async (req, res, next) => {
     try {
-        // Phase 2: Implement voter listing by precinct
-        res.json({
-            message: 'Precinct voters endpoint - Implementation pending',
-            phase: 2,
-            precinct: req.params.number,
-            filters: req.query,
-            note: 'This endpoint will return all voters in the specified precinct'
+        // Phase 2: Not yet implemented
+        res.status(501).json({
+            error: 'Not implemented',
+            message: 'Precinct voters endpoint is planned for a future release'
         });
     } catch (error) {
         next(error);
@@ -117,12 +116,10 @@ router.get('/:number/voters', async (req, res, next) => {
  */
 router.get('/:number/stats', async (req, res, next) => {
     try {
-        // Phase 4: Implement advanced statistics
-        res.json({
-            message: 'Precinct statistics endpoint - Implementation pending',
-            phase: 4,
-            precinct: req.params.number,
-            note: 'This endpoint will return detailed voter analytics'
+        // Phase 4: Not yet implemented
+        res.status(501).json({
+            error: 'Not implemented',
+            message: 'Precinct statistics endpoint is planned for a future release'
         });
     } catch (error) {
         next(error);

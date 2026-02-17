@@ -13,12 +13,14 @@
 const { Client } = require('@googlemaps/google-maps-services-js');
 const Bottleneck = require('bottleneck');
 const database = require('../config/database');
+const QuotaManager = require('./quota-manager');
+const apiKeys = require('../config/api-keys');
 
 class GeocodingService {
   constructor() {
     // Initialize Google Maps Client
     this.client = new Client({});
-    this.apiKey = process.env.GOOGLE_MAPS_GEOCODING_API_KEY;
+    this.apiKey = apiKeys.geocodingApiKey;
     
     // Rate limiting configuration
     const rateLimit = parseInt(process.env.GEOCODING_RATE_LIMIT) || 10; // Requests per second
@@ -33,6 +35,9 @@ class GeocodingService {
       reservoirRefreshInterval: 1000 // Per second
     });
     
+    // Unified quota manager (uses api_usage table)
+    this.quotaManager = new QuotaManager();
+
     // Validate API key
     if (!this.apiKey || this.apiKey === 'your_geocoding_api_key_here') {
       console.warn('⚠️  Warning: Google Maps API key not configured. Geocoding will fail.');
@@ -99,11 +104,17 @@ class GeocodingService {
         region: 'us' // Bias results to United States
       };
 
-      // Add component filtering if provided
-      if (components.locality || components.administrative_area || components.postal_code) {
+      // CRITICAL FIX: Add component filtering with state support
+      // This improves geocoding quality by providing geographic constraints
+      if (components.locality || components.administrative_area || components.postal_code || components.state) {
         const componentParts = [];
         if (components.locality) componentParts.push(`locality:${components.locality}`);
-        if (components.administrative_area) componentParts.push(`administrative_area:${components.administrative_area}`);
+        // State takes priority over administrative_area
+        if (components.state) {
+          componentParts.push(`administrative_area:${components.state}`);
+        } else if (components.administrative_area) {
+          componentParts.push(`administrative_area:${components.administrative_area}`);
+        }
         if (components.postal_code) componentParts.push(`postal_code:${components.postal_code}`);
         params.components = componentParts.join('|');
       }
@@ -368,14 +379,8 @@ class GeocodingService {
    */
   async incrementQuotaUsage() {
     try {
-      const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-      
-      await database.run(`
-        INSERT INTO api_quotas (date, service, request_count) 
-        VALUES (?, 'geocoding', 1)
-        ON CONFLICT(date, service) 
-        DO UPDATE SET request_count = request_count + 1
-      `, [date]);
+      // Use unified QuotaManager (api_usage table) instead of legacy api_quotas table
+      await this.quotaManager.incrementApiCall('geocoding', 1);
     } catch (error) {
       console.error('Failed to update quota:', error.message);
     }
@@ -391,12 +396,13 @@ class GeocodingService {
     try {
       const dateKey = date || new Date().toISOString().split('T')[0];
       
+      // Use unified api_usage table instead of legacy api_quotas table
       const result = await database.get(`
-        SELECT request_count FROM api_quotas 
-        WHERE date = ? AND service = 'geocoding'
+        SELECT call_count FROM api_usage 
+        WHERE api_name = 'geocoding' AND call_date = ?
       `, [dateKey]);
       
-      return result?.request_count || 0;
+      return result?.call_count || 0;
     } catch (error) {
       console.error('Failed to get quota usage:', error.message);
       return 0;
@@ -410,15 +416,9 @@ class GeocodingService {
    * @throws {Error} If quota limit would be exceeded
    */
   async checkQuotaLimit(estimatedCalls) {
-    const dailyLimit = parseInt(process.env.DAILY_QUOTA_LIMIT) || 10000;
-    const currentUsage = await this.getDailyUsage();
-    
-    if (currentUsage + estimatedCalls > dailyLimit) {
-      throw new Error(
-        `Daily quota limit would be exceeded: ${currentUsage + estimatedCalls}/${dailyLimit}. ` +
-        `Current usage: ${currentUsage}, Estimated calls: ${estimatedCalls}`
-      );
-    }
+    // Delegate to unified QuotaManager for consistent quota enforcement
+    // QuotaManager uses api_usage table and provides richer error messages
+    await this.quotaManager.checkQuota('geocoding', estimatedCalls);
   }
 }
 

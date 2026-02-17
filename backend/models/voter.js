@@ -6,6 +6,14 @@
 
 const database = require('../config/database');
 
+// Environment-aware logging: suppress verbose output in production
+const isDev = process.env.NODE_ENV !== 'production';
+const log = {
+  info: (...args) => isDev && console.log(...args),
+  warn: (...args) => console.warn(...args),
+  error: (...args) => console.error(...args)
+};
+
 class VoterModel {
     /**
      * Create or update a voter record with deduplication support
@@ -29,6 +37,7 @@ class VoterModel {
             'first_name',
             'address',
             'city',
+            'state',  // State code (e.g., 'TN') - included to capture CSV data
             'zip_code',
             'precinct_number',
             'date_of_birth',
@@ -45,13 +54,38 @@ class VoterModel {
 
         const placeholders = fields.map(() => '?').join(', ');
         let sql;
+        let params = values;
 
         if (importMode === 'skip') {
             // Skip if voter_id already exists
             sql = `INSERT OR IGNORE INTO voters (${fields.join(', ')}) VALUES (${placeholders})`;
         } else if (importMode === 'replace') {
-            // Update if voter_id exists, insert if not
-            sql = `INSERT OR REPLACE INTO voters (${fields.join(', ')}) VALUES (${placeholders})`;
+            // FIX: Use UPDATE for existing records, INSERT for new ones
+            // This prevents foreign key constraint violations by avoiding DELETE operations
+            // on voters with election_history records
+            const existing = await database.get(
+                'SELECT id FROM voters WHERE voter_id = ?',
+                [voterData.voter_id]
+            );
+
+            if (existing) {
+                // Update existing record without disturbing foreign key relationships
+                // Exclude voter_id from update since it's the unique identifier
+                const updateFields = fields.filter(f => f !== 'voter_id');
+                const updateValues = updateFields.map(field => {
+                    if (field === 'super_voter') {
+                        return voterData[field] ? 1 : 0;
+                    }
+                    return voterData[field] !== undefined ? voterData[field] : null;
+                });
+                
+                sql = `UPDATE voters SET ${updateFields.map(f => `${f} = ?`).join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE voter_id = ?`;
+                params = [...updateValues, voterData.voter_id];
+            } else {
+                // Insert new record
+                sql = `INSERT INTO voters (${fields.join(', ')}) VALUES (${placeholders})`;
+                params = values;
+            }
         } else if (importMode === 'flag') {
             // Check for existing voter first
             const existing = await database.get(
@@ -66,7 +100,7 @@ class VoterModel {
             throw new Error(`Invalid import mode: ${importMode}`);
         }
 
-        const result = await database.run(sql, values);
+        const result = await database.run(sql, params);
         return result;
     }
 
@@ -158,7 +192,14 @@ class VoterModel {
                 early_voted as earlyVoted
             FROM election_history
             WHERE voter_id = ?
-            ORDER BY election_code`,
+            -- Sort chronologically: year ASC, then Primary > Runoff > General
+            ORDER BY SUBSTR(election_code, 1, 4) ASC,
+              CASE SUBSTR(election_code, -1)
+                WHEN 'P' THEN 1
+                WHEN 'R' THEN 2
+                WHEN 'G' THEN 3
+                ELSE 4
+              END ASC`,
             [voter.voterId]
         );
 
@@ -313,7 +354,14 @@ class VoterModel {
                     FROM election_history 
                     WHERE election_history.voter_id = v.voter_id 
                       AND party_code IS NOT NULL
-                    ORDER BY election_code DESC 
+                    /* Sort chronologically: year DESC, then General > Runoff > Primary */
+                    ORDER BY SUBSTR(election_code, 1, 4) DESC,
+                      CASE SUBSTR(election_code, -1)
+                        WHEN 'G' THEN 1
+                        WHEN 'R' THEN 2
+                        WHEN 'P' THEN 3
+                        ELSE 4
+                      END ASC
                     LIMIT 1
                 ) as mostRecentParty,
                 (
@@ -323,8 +371,9 @@ class VoterModel {
                       AND voted = 1
                 ) as electionsVoted,
                 (
-                    SELECT COUNT(DISTINCT election_code)
+                    SELECT COUNT(*)
                     FROM election_history
+                    WHERE election_history.voter_id = v.voter_id
                 ) as totalElections
             FROM voters v
             ${whereClause}
@@ -460,7 +509,14 @@ class VoterModel {
             `SELECT election_code, voted 
              FROM election_history 
              WHERE voter_id = ? 
-             ORDER BY election_code DESC 
+             /* Sort chronologically: year DESC, then General > Runoff > Primary */
+             ORDER BY SUBSTR(election_code, 1, 4) DESC,
+               CASE SUBSTR(election_code, -1)
+                 WHEN 'G' THEN 1
+                 WHEN 'R' THEN 2
+                 WHEN 'P' THEN 3
+                 ELSE 4
+               END ASC
              LIMIT 5`,
             [voterId]
         );
@@ -555,7 +611,7 @@ class VoterModel {
             lookback = 1;
         }
         
-        console.log(`Super voter calculation: ${threshold} votes in last ${lookback} elections (${totalElections} total elections available)`);
+        log.info(`Super voter calculation: ${threshold} votes in last ${lookback} elections (${totalElections} total elections available)`);
         
         // Step 3: Update flags with dynamic threshold
         const result = await database.run(`
@@ -570,7 +626,14 @@ class VoterModel {
                     SELECT voted 
                     FROM election_history 
                     WHERE election_history.voter_id = voters.voter_id 
-                    ORDER BY election_code DESC 
+                    /* Sort chronologically: year DESC, then General > Runoff > Primary */
+                    ORDER BY SUBSTR(election_code, 1, 4) DESC,
+                      CASE SUBSTR(election_code, -1)
+                        WHEN 'G' THEN 1
+                        WHEN 'R' THEN 2
+                        WHEN 'P' THEN 3
+                        ELSE 4
+                      END ASC
                     LIMIT ?
                 ) eh
             )
@@ -585,7 +648,9 @@ class VoterModel {
             'SELECT COUNT(*) as total FROM voters WHERE super_voter = 1'
         );
         
-        console.log(`✅ ${count.total} voters marked as super voters (${Math.round(count.total / 2677 * 100)}% of total)`);
+        const totalResult = await database.get('SELECT COUNT(*) as total FROM voters');
+        const percentage = totalResult.total > 0 ? Math.round(count.total / totalResult.total * 100) : 0;
+        log.info(`✅ ${count.total} voters marked as super voters (${percentage}% of total)`);
         return count.total;
     }
 
@@ -595,6 +660,11 @@ class VoterModel {
      * @returns {Promise<number>} Number of precincts updated
      */
     async recalculateAllPrecinctStats() {
+        // Remove stale precincts that have no matching voters
+        await database.run(
+            'DELETE FROM precincts WHERE precinct_number NOT IN (SELECT DISTINCT precinct_number FROM voters)'
+        );
+
         const precincts = await database.all('SELECT DISTINCT precinct_number FROM voters');
         
         for (const precinct of precincts) {
@@ -680,7 +750,7 @@ class VoterModel {
                 geocoding_quality,
                 super_voter
             FROM voters 
-            WHERE voter_id IN (${placeholders})`,
+            WHERE id IN (${placeholders})`,
             voterIds
         );
 

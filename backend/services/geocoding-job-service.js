@@ -41,9 +41,12 @@ class GeocodingJobService {
       }
 
       // Validate voter IDs exist
-      const validVoters = await database.all(`
-        SELECT id FROM voters WHERE id IN (${voterIds.join(',')})
-      `);
+      // Use parameterized query to prevent SQL injection
+      const placeholders = voterIds.map(() => '?').join(',');
+      const validVoters = await database.all(
+        `SELECT id FROM voters WHERE id IN (${placeholders})`,
+        voterIds
+      );
 
       if (validVoters.length === 0) {
         throw new Error('No valid voter IDs provided');
@@ -52,6 +55,12 @@ class GeocodingJobService {
       // Check quota limit
       const estimatedApiCalls = Math.ceil(validVoters.length * 0.2); // Assume 80% cache hit rate
       await this.geocodingService.checkQuotaLimit(estimatedApiCalls);
+
+      // Include voter IDs in job options so processJob can scope its query
+      const jobOptions = {
+        ...options,
+        voter_ids: validVoters.map(v => v.id)
+      };
 
       // Create job record
       const result = await database.run(`
@@ -63,7 +72,7 @@ class GeocodingJobService {
         ) VALUES (?, ?, ?, 'PENDING')
       `, [
         validVoters.length,
-        JSON.stringify(options),
+        JSON.stringify(jobOptions),
         options.created_by || 'system'
       ]);
       
@@ -123,15 +132,33 @@ class GeocodingJobService {
       let cacheHits = 0;
       let apiCalls = 0;
       
+      // Use voter IDs from job options if available
+      const voterIds = options.voter_ids;
+
       // Process in batches until all addresses are geocoded
       while (processedCount < job.total_records) {
         // Fetch next batch of voters needing geocoding
-        const voters = await database.all(`
-          SELECT id, voter_id, address, city, state, zip_code, latitude
-          FROM voters
-          WHERE latitude IS NULL
-          LIMIT ?
-        `, [batchSize]);
+        let voters;
+
+        if (voterIds && voterIds.length > 0) {
+          // Scope to specific voter IDs from the job
+          const placeholders = voterIds.map(() => '?').join(',');
+          voters = await database.all(`
+            SELECT id, voter_id, address, city, state, zip_code, latitude
+            FROM voters
+            WHERE id IN (${placeholders})
+              AND latitude IS NULL
+            LIMIT ?
+          `, [...voterIds, batchSize]);
+        } else {
+          // Fallback: process any ungeocoded voters
+          voters = await database.all(`
+            SELECT id, voter_id, address, city, state, zip_code, latitude
+            FROM voters
+            WHERE latitude IS NULL
+            LIMIT ?
+          `, [batchSize]);
+        }
         
         if (voters.length === 0) {
           console.log('No more addresses to process');
@@ -141,6 +168,11 @@ class GeocodingJobService {
         // Process each voter in the batch
         for (const voter of voters) {
           try {
+            // Warn once per voter if state is missing
+            if (!voter.state) {
+              console.warn(`⚠️ Voter ${voter.id} missing state, defaulting to TN`);
+            }
+
             // Step 1: Check cache
             const cached = await this.cacheService.getCachedGeocode(
               voter.address,
@@ -152,8 +184,11 @@ class GeocodingJobService {
             let geocodeResult;
             
             if (cached) {
-              // Use cached result
-              geocodeResult = cached;
+              // Use cached result — add success flag since cache doesn't include it
+              geocodeResult = {
+                ...cached,
+                success: cached.latitude != null && cached.longitude != null
+              };
               cacheHits++;
               console.log(`Cache hit for voter ${voter.id}: ${voter.address}`);
             } else {
@@ -220,6 +255,11 @@ class GeocodingJobService {
           }
           
           processedCount++;
+
+          // Stop if we've reached the target
+          if (processedCount >= job.total_records) {
+            break;
+          }
           
           // Update job progress every 10 records
           if (processedCount % 10 === 0) {
@@ -232,6 +272,11 @@ class GeocodingJobService {
             });
             console.log(`Progress: ${processedCount}/${job.total_records} (${successCount} success, ${failedCount} failed)`);
           }
+        }
+
+        // Break outer loop if we've reached the target
+        if (processedCount >= job.total_records) {
+          break;
         }
         
         // Small delay between batches to avoid overwhelming the system
@@ -505,11 +550,14 @@ class GeocodingJobService {
       }
       
       // Reset geocoding data for retry
-      await database.run(`
-        UPDATE voters
+      // Use parameterized query to prevent SQL injection
+      const retryPlaceholders = voterIds.map(() => '?').join(',');
+      await database.run(
+        `UPDATE voters
         SET latitude = NULL, longitude = NULL, geocoding_quality = NULL
-        WHERE id IN (${voterIds.join(',')})
-      `);
+        WHERE id IN (${retryPlaceholders})`,
+        voterIds
+      );
       
       // Create new job
       const newJobId = await this.createJob(voterIds, {

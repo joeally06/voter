@@ -6,17 +6,63 @@ const fs = require('fs');
  * Database configuration and connection management
  */
 
+/**
+ * Find project root by searching for package.json
+ * This enables the server to run from any subdirectory (backend/, scripts/, etc.)
+ * @param {string} startPath - Starting directory for search (defaults to __dirname)
+ * @returns {string} Absolute path to project root
+ * @throws {Error} If package.json not found (not in Voter project)
+ */
+function findProjectRoot(startPath = __dirname) {
+    let currentPath = startPath;
+    const rootPath = path.parse(currentPath).root;
+    
+    while (currentPath !== rootPath) {
+        if (fs.existsSync(path.join(currentPath, 'package.json'))) {
+            return currentPath;
+        }
+        currentPath = path.dirname(currentPath);
+    }
+    
+    throw new Error(
+        'Could not find project root (package.json not found). ' +
+        'Ensure server is run from the Voter project directory.'
+    );
+}
+
 class Database {
     constructor() {
-        this.dbPath = process.env.DB_PATH || path.join(__dirname, '../../data/voter_platform.db');
+        // IMPROVED: Use project root for absolute path resolution
+        // Supports running from any subdirectory (backend/, scripts/, etc.)
+        const projectRoot = findProjectRoot();
+        
+        // Get database path from environment or use default
+        let dbPath = process.env.DB_PATH || path.join(projectRoot, 'data', 'voter_platform.db');
+        
+        // CRITICAL: Convert relative paths to absolute using project root
+        // This ensures DB_PATH=./data/voter_platform.db works correctly regardless of CWD
+        if (!path.isAbsolute(dbPath)) {
+            dbPath = path.join(projectRoot, dbPath);
+        }
+        
+        this.dbPath = dbPath;
         this.db = null;
         this.isConnected = false;
+        
+        // VALIDATION: Log resolved path for debugging
+        console.log(`📂 Database path: ${this.dbPath}`);
     }
 
     /**
      * Initialize database connection
+     * Idempotent: returns immediately if already connected
      */
     async connect() {
+        // Idempotent: if already connected, skip re-connection
+        if (this.isConnected && this.db) {
+            return this;
+        }
+
         return new Promise((resolve, reject) => {
             // Ensure data directory exists
             const dataDir = path.dirname(this.dbPath);
@@ -24,7 +70,7 @@ class Database {
                 fs.mkdirSync(dataDir, { recursive: true });
             }
 
-            this.db = new sqlite3.Database(this.dbPath, (err) => {
+            this.db = new sqlite3.Database(this.dbPath, async (err) => {
                 if (err) {
                     console.error('Database connection failed:', err.message);
                     reject(err);
@@ -35,10 +81,46 @@ class Database {
                     // Enable foreign keys
                     this.db.run('PRAGMA foreign_keys = ON');
                     
-                    resolve();
+                    // VALIDATION: Validate schema exists
+                    try {
+                        const tables = await this.all(
+                            "SELECT name FROM sqlite_master WHERE type='table'"
+                        );
+                        const requiredTables = ['voters', 'precincts', 'election_history'];
+                        const existingTables = tables.map(t => t.name);
+                        const missingTables = requiredTables.filter(t => !existingTables.includes(t));
+                        
+                        if (missingTables.length > 0) {
+                            console.error('❌ DATABASE SCHEMA ERROR: Missing required tables:', missingTables);
+                            console.error('🔧 Run setup script to initialize database:');
+                            console.error('   npm run setup');
+                            reject(new Error(`Missing tables: ${missingTables.join(', ')}`));
+                            return;
+                        }
+                        
+                        console.log(`✅ Database schema validated (${existingTables.length} tables)`);
+                    } catch (validationError) {
+                        console.error('❌ Schema validation failed:', validationError);
+                        reject(validationError);
+                        return;
+                    }
+                    
+                    resolve(this);
                 }
             });
         });
+    }
+
+    /**
+     * Guard: throws if database is not connected
+     * @private
+     */
+    _ensureConnected() {
+        if (!this.db || !this.isConnected) {
+            throw new Error(
+                'Database not connected. Call await database.connect() before executing queries.'
+            );
+        }
     }
 
     /**
@@ -47,6 +129,7 @@ class Database {
      * @param {array} params - Query parameters
      */
     run(sql, params = []) {
+        this._ensureConnected();
         return new Promise((resolve, reject) => {
             this.db.run(sql, params, function(err) {
                 if (err) {
@@ -65,6 +148,7 @@ class Database {
      * @param {array} params - Query parameters
      */
     get(sql, params = []) {
+        this._ensureConnected();
         return new Promise((resolve, reject) => {
             this.db.get(sql, params, (err, row) => {
                 if (err) {
@@ -82,6 +166,7 @@ class Database {
      * @param {array} params - Query parameters
      */
     all(sql, params = []) {
+        this._ensureConnected();
         return new Promise((resolve, reject) => {
             this.db.all(sql, params, (err, rows) => {
                 if (err) {
@@ -100,6 +185,8 @@ class Database {
      * @returns {Promise} Resolves with callback result or statement results, rejects on error with automatic rollback
      */
     async transaction(callbackOrStatements) {
+        this._ensureConnected();
+
         // Check if callback function was passed
         if (typeof callbackOrStatements === 'function') {
             const callback = callbackOrStatements;
@@ -129,8 +216,12 @@ class Database {
         // Legacy support: array of statements
         const statements = callbackOrStatements;
         return new Promise((resolve, reject) => {
-            this.db.serialize(() => {
-                this.db.run('BEGIN TRANSACTION');
+            // Capture db reference to avoid 'this' context loss in SQLite callbacks
+            // Inside function(err) callbacks, 'this' refers to SQLite statement result
+            // (provides .lastID and .changes), NOT the Database wrapper instance
+            const db = this.db;
+            db.serialize(() => {
+                db.run('BEGIN TRANSACTION');
                 
                 const results = [];
                 let hasError = false;
@@ -138,16 +229,16 @@ class Database {
                 statements.forEach((stmt, index) => {
                     if (hasError) return;
 
-                    this.db.run(stmt.sql, stmt.params || [], function(err) {
+                    db.run(stmt.sql, stmt.params || [], function(err) {
                         if (err) {
                             hasError = true;
-                            this.db.run('ROLLBACK');
+                            db.run('ROLLBACK');
                             reject(err);
                         } else {
                             results.push({ index, id: this.lastID, changes: this.changes });
                             
                             if (results.length === statements.length) {
-                                this.db.run('COMMIT', (err) => {
+                                db.run('COMMIT', (err) => {
                                     if (err) {
                                         reject(err);
                                     } else {
@@ -168,20 +259,30 @@ class Database {
      */
     async getStats() {
         try {
-            const voterCount = await this.get('SELECT COUNT(*) as count FROM voters');
-            const geocodedCount = await this.get('SELECT COUNT(*) as count FROM voters WHERE latitude IS NOT NULL');
-            const precinctCount = await this.get('SELECT COUNT(*) as count FROM precincts');
-            const cacheSize = await this.get('SELECT COUNT(*) as count FROM geocoding_cache');
-            // CRITICAL FIX: Added super_voter count query as required by frontend health status
-            const superVoterCount = await this.get('SELECT COUNT(*) as count FROM voters WHERE super_voter = 1');
+            // Helper: safely run a COUNT query, returning defaultVal if table is missing
+            const safeCount = async (query, defaultVal = 0) => {
+                try {
+                    const result = await this.get(query);
+                    return result ? Object.values(result)[0] : defaultVal;
+                } catch (e) {
+                    console.warn(`Stats query failed: ${e.message}`);
+                    return defaultVal;
+                }
+            };
+
+            const totalVoters = await safeCount('SELECT COUNT(*) as count FROM voters');
+            const geocodedVoters = await safeCount('SELECT COUNT(*) as count FROM voters WHERE latitude IS NOT NULL');
+            const totalPrecincts = await safeCount('SELECT COUNT(*) as count FROM precincts');
+            const cacheSize = await safeCount('SELECT COUNT(*) as count FROM geocoding_cache');
+            const superVoters = await safeCount('SELECT COUNT(*) as count FROM voters WHERE super_voter = 1');
 
             return {
-                totalVoters: voterCount.count,
-                geocodedVoters: geocodedCount.count,
-                totalPrecincts: precinctCount.count,
-                superVoters: superVoterCount.count,  // CRITICAL FIX: Added missing field
-                cacheSize: cacheSize.count,
-                geocodingProgress: voterCount.count > 0 ? (geocodedCount.count / voterCount.count * 100).toFixed(1) : 0
+                totalVoters,
+                geocodedVoters,
+                totalPrecincts,
+                superVoters,
+                cacheSize,
+                geocodingProgress: totalVoters > 0 ? (geocodedVoters / totalVoters * 100).toFixed(1) : 0
             };
         } catch (error) {
             console.error('Error getting database stats:', error);

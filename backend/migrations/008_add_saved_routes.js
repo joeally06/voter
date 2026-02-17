@@ -15,9 +15,7 @@ exports.up = function(db) {
       accessed_at DATETIME,
       access_count INTEGER DEFAULT 0,
       expires_at DATETIME,
-      is_public BOOLEAN DEFAULT 1,
-      
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+      is_public BOOLEAN DEFAULT 1
     )
   `).then(() => {
     return db.run(`CREATE INDEX IF NOT EXISTS idx_saved_routes_user ON saved_routes(user_id)`);

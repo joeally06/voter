@@ -178,7 +178,7 @@ async function geocodeActiveVoters() {
 
 // Helper function to generate progress bar
 function generateProgressBar(percent, length = 30) {
-  const filled = Math.floor(percent / 100 * length);
+  const filled = Math.min(Math.floor(percent / 100 * length), length);
   const empty = length - filled;
   return '[' + '█'.repeat(filled) + '░'.repeat(empty) + ']';
 }

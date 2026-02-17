@@ -99,8 +99,9 @@ class AnalyticsService {
             CAST(SUM(CASE WHEN v.super_voter = 1 THEN 1 ELSE 0 END) AS REAL) / 
               NULLIF(COUNT(v.id), 0) * 100 as superVoterRate
           FROM precincts p
-          LEFT JOIN voters v ON p.precinct_number = v.precinct_number
+          INNER JOIN voters v ON p.precinct_number = v.precinct_number
           GROUP BY p.precinct_number, p.name
+          HAVING COUNT(v.id) > 0
           ORDER BY p.precinct_number
         `),
         

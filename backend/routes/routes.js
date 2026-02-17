@@ -1,12 +1,18 @@
 /**
  * Route Planning API Routes
  * Phase 5: Distance Matrix API integration and route optimization
+ * Phase 6: Route Export & Mobile Integration
  * 
  * Endpoints:
  * - POST /api/routes/calculate - Calculate optimal route for voter list
  * - POST /api/routes/distance-matrix - Get distance/duration matrix
  * - GET /api/routes/quota-status - API quota usage status
  * - GET /api/routes/cache-stats - Route cache statistics
+ * - POST /api/routes/save - Save route and generate shareable ID
+ * - GET /api/routes/:routeId - Retrieve saved route by ID
+ * - DELETE /api/routes/:routeId - Delete saved route
+ * - GET /api/routes/:routeId/print - Generate print-friendly HTML view
+ * - POST /api/routes/cleanup-expired - Clean up expired routes (maintenance)
  */
 
 const express = require('express');

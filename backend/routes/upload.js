@@ -322,17 +322,24 @@ router.get('/:id', async (req, res, next) => {
         
         // Calculate progress percentage
         let progress = null;
-        if (upload.records_processed > 0) {
-            const total = upload.records_processed; // We don't store total separately
-            const percent = upload.records_successful > 0 
-                ? ((upload.records_processed / (upload.records_successful + upload.records_failed)) * 100).toFixed(1)
-                : 0;
+        if (upload.total_records > 0) {
+            const percent = ((upload.records_processed / upload.total_records) * 100).toFixed(1);
             
             progress = {
+                total: upload.total_records,
                 processed: upload.records_processed,
                 successful: upload.records_successful,
                 failed: upload.records_failed,
-                percent: parseFloat(percent)
+                percent: Math.min(parseFloat(percent), 100.0)
+            };
+        } else if (upload.records_processed > 0) {
+            // Fallback when total_records is not yet set (legacy imports)
+            progress = {
+                total: null,
+                processed: upload.records_processed,
+                successful: upload.records_successful,
+                failed: upload.records_failed,
+                percent: null
             };
         }
         

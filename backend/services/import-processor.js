@@ -11,6 +11,15 @@ const { parseCSV } = require('../parsers/csv-parser');
 
 const BATCH_SIZE = 500; // Records per transaction
 
+// Environment-aware logging: suppress verbose output in production
+const isDev = process.env.NODE_ENV !== 'production';
+const log = {
+  info: (...args) => isDev && console.log(...args),
+  warn: (...args) => console.warn(...args),
+  error: (...args) => console.error(...args),
+  always: (...args) => console.log(...args)
+};
+
 /**
  * Process a file import
  * @param {number} importId - Import log ID
@@ -27,7 +36,7 @@ async function processImport(importId, filePath, fileType, options = {}) {
         await updateImportStatus(importId, 'processing', null);
 
         // Parse file based on type
-        console.log(`Starting ${fileType.toUpperCase()} import from: ${filePath}`);
+        log.info(`Starting ${fileType.toUpperCase()} import from: ${filePath}`);
         const parseResult = fileType === 'dbf' 
             ? await parseDBF(filePath)
             : await parseCSV(filePath, options);
@@ -36,10 +45,16 @@ async function processImport(importId, filePath, fileType, options = {}) {
             throw new Error('No valid records found in file');
         }
 
-        console.log(`Parsed ${parseResult.totalCount} records`);
+        log.info(`Parsed ${parseResult.totalCount} records`);
 
         // Process records in batches
         const totalRecords = parseResult.records.length;
+
+        // Store total record count for accurate progress tracking (M2 fix)
+        await database.run(
+            'UPDATE import_logs SET total_records = ? WHERE id = ?',
+            [totalRecords, importId]
+        );
         let processedCount = 0;
         let successCount = 0;
         let failedCount = 0;
@@ -70,15 +85,15 @@ async function processImport(importId, filePath, fileType, options = {}) {
 
             // Log progress
             const progress = ((processedCount / totalRecords) * 100).toFixed(1);
-            console.log(`Progress: ${processedCount}/${totalRecords} (${progress}%) - Success: ${successCount}, Failed: ${failedCount}`);
+            log.info(`Progress: ${processedCount}/${totalRecords} (${progress}%) - Success: ${successCount}, Failed: ${failedCount}`);
         }
 
         // Update precinct statistics
-        console.log('Updating precinct statistics...');
+        log.info('Updating precinct statistics...');
         await voterModel.recalculateAllPrecinctStats();
 
         // Calculate super voters (for both CSV and DBF imports with election history)
-        console.log('Calculating super voter status...');
+        log.info('Calculating super voter status...');
         await voterModel.recalculateAllSuperVoters();
 
         // Set final status
@@ -89,7 +104,7 @@ async function processImport(importId, filePath, fileType, options = {}) {
 
         await updateImportStatus(importId, finalStatus, errorMessage);
 
-        console.log(`Import completed: ${successCount} successful, ${failedCount} failed`);
+        log.info(`Import completed: ${successCount} successful, ${failedCount} failed`);
 
         return {
             success: true,
@@ -108,7 +123,9 @@ async function processImport(importId, filePath, fileType, options = {}) {
 }
 
 /**
- * Process a batch of records with transaction support
+ * Process a batch of records with PER-RECORD error handling
+ * CRITICAL FIX: Process records individually instead of atomic batch transaction
+ * This allows partial success - valid records are saved even if some fail
  * @param {Array} records - Batch of voter records to process
  * @param {number} importId - Import log ID for tracking
  * @param {string} importMode - Import mode: 'skip', 'replace', or 'flag'
@@ -122,80 +139,53 @@ async function processBatch(records, importId, importMode, voterModel, startReco
     let failedCount = 0;
     const errors = [];
 
-    // Prepare batch operations
-    const operations = [];
-    const electionHistoryOps = [];
-
-    // Phase 1: Validate all records first
+    // CRITICAL FIX: Process each record individually to allow partial success
+    // Instead of batch transaction, handle each record separately
     for (let i = 0; i < records.length; i++) {
         const record = records[i];
         const recordNumber = startRecordNumber + i;
 
         try {
-            // Validate record
+            // Step 1: Validate record
             validateVoter(record);
 
-            // Prepare voter insert operation
-            operations.push({
-                record,
-                recordNumber
-            });
+            // Step 2: Insert voter record (individual transaction)
+            await voterModel.create(record, importMode);
 
-            // Prepare election history operations if present
+            // Step 3: Insert election history if present
             if (record.electionHistory && record.electionHistory.length > 0) {
                 for (const history of record.electionHistory) {
-                    electionHistoryOps.push({
-                        voterId: record.voter_id,
-                        history,
-                        recordNumber
-                    });
+                    try {
+                        await voterModel.createElectionHistory(record.voter_id, history);
+                    } catch (historyError) {
+                        // Log election history error but don't fail the voter record
+                        log.warn(`Failed to save election history for voter ${record.voter_id}:`, historyError.message);
+                    }
                 }
             }
 
+            // Success!
+            successCount++;
+
         } catch (error) {
+            // Record failed - log detailed error and continue with next record
             failedCount++;
+            
+            // Determine error type
+            const errorType = error.message.includes('UNIQUE constraint') ? 'duplicate' :
+                             error.message.includes('Missing required field') ? 'validation' :
+                             error.message.includes('City must be') ? 'validation' :
+                             'database';
+            
             errors.push({
                 recordNumber,
-                errorType: 'validation',
+                errorType,
                 errorMessage: error.message,
                 recordData: JSON.stringify(record).substring(0, 500) // Limit size
             });
-        }
-    }
-
-    // Phase 2: Execute batch insert in transaction (atomic all-or-nothing)
-    if (operations.length > 0) {
-        try {
-            // Use database transaction for atomic batch insert
-            await database.transaction(async () => {
-                // Insert all voters in this batch
-                for (const op of operations) {
-                    await voterModel.create(op.record, importMode);
-                }
-
-                // Insert all election history records
-                for (const op of electionHistoryOps) {
-                    await voterModel.createElectionHistory(op.voterId, op.history);
-                }
-            });
-
-            // Transaction succeeded - all records inserted
-            successCount = operations.length;
-
-        } catch (error) {
-            // Transaction failed - rollback occurred, mark all records as failed
-            console.error('Batch transaction failed (rolled back):', error);
-            failedCount = operations.length;
             
-            // Add batch-level error for all operations
-            for (const op of operations) {
-                errors.push({
-                    recordNumber: op.recordNumber,
-                    errorType: 'database_transaction',
-                    errorMessage: `Batch transaction failed: ${error.message}`,
-                    recordData: JSON.stringify(op.record).substring(0, 500)
-                });
-            }
+            // Log individual failure for debugging
+            log.warn(`Record ${recordNumber} failed: ${error.message}`);
         }
     }
 
@@ -256,8 +246,9 @@ function validateVoter(voter) {
     }
 
     // Precinct number validation
-    if (voter.precinct_number && !/^\d{1,3}$/.test(voter.precinct_number)) {
-        errors.push('Precinct number must be 1-3 digits');
+    // CRITICAL FIX: Allow district-precinct format like "2-4" or numeric format
+    if (voter.precinct_number && !/^\d{1,3}(-\d{1,3})?$/.test(voter.precinct_number)) {
+        errors.push('Precinct number must be 1-3 digits or district-precinct format (e.g., "2-4")');
     }
 
     // Obion County city allowlist validation

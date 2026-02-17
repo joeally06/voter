@@ -16,6 +16,7 @@ const Bottleneck = require('bottleneck');
 const RouteCacheService = require('./route-cache-service');
 const QuotaManager = require('./quota-manager');
 const database = require('../config/database');
+const apiKeys = require('../config/api-keys');
 
 /**
  * Sparse Distance Matrix - Progressive distance fetching
@@ -166,8 +167,7 @@ class DistanceMatrixService {
   constructor() {
     // Initialize Google Maps Client
     this.client = new Client({});
-    this.apiKey = process.env.GOOGLE_MAPS_DISTANCE_MATRIX_API_KEY || 
-                  process.env.GOOGLE_MAPS_GEOCODING_API_KEY;
+    this.apiKey = apiKeys.distanceMatrixApiKey;
     
     // Initialize services
     this.cacheService = new RouteCacheService();

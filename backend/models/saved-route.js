@@ -3,7 +3,9 @@
  * Handles persistence and retrieval of shareable routes
  */
 
-const Database = require('../config/database');
+// CRITICAL FIX: Use lowercase 'database' to import singleton instance (not class)
+// This matches the pattern used throughout the codebase (see voter.js)
+const database = require('../config/database');
 const crypto = require('crypto');
 
 class SavedRouteModel {
@@ -22,7 +24,7 @@ class SavedRouteModel {
    * @returns {Promise<string>} Route ID
    */
   async saveRoute(routeData, options = {}) {
-    const db = await Database.getDb();
+    // CRITICAL FIX: Use database singleton directly (not Database.getDb())
     const routeId = SavedRouteModel.generateRouteId();
     
     const {
@@ -44,7 +46,8 @@ class SavedRouteModel {
       savedAt: new Date().toISOString()
     });
     
-    await db.run(
+    // CRITICAL FIX: Call database.run() directly on singleton instance
+    await database.run(
       `INSERT INTO saved_routes 
        (id, user_id, route_name, route_data, travel_mode, expires_at, is_public)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -61,9 +64,8 @@ class SavedRouteModel {
    * @returns {Promise<Object|null>} Route data or null if not found/expired
    */
   async getRoute(routeId) {
-    const db = await Database.getDb();
-    
-    const route = await db.get(
+    // CRITICAL FIX: Use database singleton directly
+    const route = await database.get(
       `SELECT * FROM saved_routes WHERE id = ?`,
       [routeId]
     );
@@ -106,9 +108,8 @@ class SavedRouteModel {
    * @param {string} routeId - Route identifier
    */
   async trackAccess(routeId) {
-    const db = await Database.getDb();
-    
-    await db.run(
+    // CRITICAL FIX: Use database singleton directly
+    await database.run(
       `UPDATE saved_routes 
        SET accessed_at = CURRENT_TIMESTAMP, 
            access_count = access_count + 1
@@ -124,8 +125,7 @@ class SavedRouteModel {
    * @returns {Promise<boolean>} Success status
    */
   async deleteRoute(routeId, userId = null) {
-    const db = await Database.getDb();
-    
+    // CRITICAL FIX: Use database singleton directly
     let query = 'DELETE FROM saved_routes WHERE id = ?';
     let params = [routeId];
     
@@ -134,7 +134,8 @@ class SavedRouteModel {
       params.push(userId);
     }
     
-    const result = await db.run(query, params);
+    // CRITICAL FIX: Call database.run() directly
+    const result = await database.run(query, params);
     
     return result.changes > 0;
   }
@@ -144,9 +145,8 @@ class SavedRouteModel {
    * @returns {Promise<number>} Number of deleted routes
    */
   async cleanupExpiredRoutes() {
-    const db = await Database.getDb();
-    
-    const result = await db.run(
+    // CRITICAL FIX: Use database singleton directly
+    const result = await database.run(
       `DELETE FROM saved_routes 
        WHERE expires_at IS NOT NULL 
        AND expires_at < CURRENT_TIMESTAMP`
@@ -163,9 +163,8 @@ class SavedRouteModel {
    * @returns {Promise<Array>} List of routes
    */
   async getRoutesByUser(userId, limit = 50) {
-    const db = await Database.getDb();
-    
-    const routes = await db.all(
+    // CRITICAL FIX: Use database singleton directly
+    const routes = await database.all(
       `SELECT id, route_name, travel_mode, created_at, accessed_at, access_count
        FROM saved_routes
        WHERE user_id = ?

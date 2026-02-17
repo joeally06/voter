@@ -67,8 +67,10 @@ router.get('/dashboard', async (req, res, next) => {
     }
 });
 
-/** with comparative analysis
- * 
+/**
+ * GET /api/analytics/turnout
+ * Returns voter turnout data with comparative analysis
+ *
  * Query parameters:
  * - electionCode: Specific election to analyze (optional)
  * - precinct: Filter by precinct number (2 digits, optional)

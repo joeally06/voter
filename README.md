@@ -30,8 +30,13 @@ A local web application for processing voter database files (.dbf) from the Obio
 
 4. **Start Development Server**
    ```bash
+   # From project root (C:\Voter)
+   npm start
+   # or for auto-reload during development
    npm run dev
    ```
+   
+   **Important**: Always run from the project root directory, not from `backend/` subdirectory.
 
 5. **Open Application**
    Navigate to `http://localhost:3000`
@@ -174,6 +179,66 @@ npm start
 
 ## Troubleshooting
 
+### Server Won't Start - "No Such Table: voters"
+
+**Symptoms**:
+- Error: `SQLITE_ERROR: no such table: voters`
+- Server crashes immediately on startup
+- All API endpoints return 500 errors
+
+**Root Cause**: Working directory issue - server must be run from project root.
+
+**Solution**:
+```powershell
+# ✅ CORRECT: Run from project root
+cd C:\Voter
+npm start
+
+# ✅ ALTERNATIVE: Use npm scripts (they always run from project root)
+npm run dev
+
+# ❌ INCORRECT: Don't run from backend/ directory
+cd backend
+node server.js  # This will fail!
+```
+
+**Diagnosis**:
+```powershell
+# Run health check to diagnose issues
+npm run doctor
+
+# Check database manually
+cd C:\Voter
+node check-tables.js
+```
+
+**Still Having Issues?**
+1. Run setup script: `npm run setup`
+2. Check .env file exists and has `GOOGLE_MAPS_API_KEY`
+3. Ensure you're in the correct directory: `C:\Voter`
+4. Kill hanging processes: `Get-Process -Name node | Stop-Process -Force`
+
+---
+
+### Port 3000 Already in Use
+
+**Symptoms**:
+- Error: `PORT CONFLICT ERROR: Port 3000 is already in use`
+
+**Solution**:
+```powershell
+# Kill all node processes
+Get-Process -Name node -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# Or use cleanup script (included in npm start)
+npm run prestart
+
+# Then start normally
+npm start
+```
+
+---
+
 ### Common Issues
 
 1. **DBF Import Fails**
@@ -192,6 +257,7 @@ npm start
    - Verify API key permissions
 
 ### Support
+- Run `npm run doctor` for automated diagnostics
 - Check `logs/app.log` for detailed error messages
 - Review API usage in Google Cloud Console
 - Test with small data files first

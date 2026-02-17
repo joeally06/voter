@@ -32,13 +32,15 @@ async function geocodeVoters() {
     // Step 3: Start batch geocoding job
     console.log('2️⃣  Starting batch geocoding job...');
     const batchResponse = await axios.post(`${API_BASE_URL}/api/geocode/batch`, {
-      limit: ungeocodedCount, // Geocode all ungeocodedvoters
-      forceRefresh: false      // Use cache when available
+      all: true,               // Geocode all ungecoded voters
+      options: {
+        useCache: true         // Use cache when available
+      }
     });
 
     const jobId = batchResponse.data.jobId;
     console.log(`   ✅ Job created: ${jobId}`);
-    console.log(`   📦 Processing ${batchResponse.data.totalAddresses} addresses\n`);
+    console.log(`   📦 Processing ${batchResponse.data.totalRecords} addresses\n`);
 
     // Step 4: Monitor progress
     console.log('3️⃣  Monitoring geocoding progress...');
@@ -51,7 +53,7 @@ async function geocodeVoters() {
       await sleep(5000); // Check every 5 seconds
 
       const statusResponse = await axios.get(`${API_BASE_URL}/api/geocode/jobs/${jobId}`);
-      const job = statusResponse.data.job;
+      const job = statusResponse.data; // Job status is spread into data directly
 
       // Show progress if it changed
       if (job.progress > lastProgress) {
@@ -115,7 +117,7 @@ async function geocodeVoters() {
 
 // Helper function to generate progress bar
 function generateProgressBar(percent, length = 30) {
-  const filled = Math.floor(percent / 100 * length);
+  const filled = Math.min(Math.floor(percent / 100 * length), length);
   const empty = length - filled;
   return '[' + '█'.repeat(filled) + '░'.repeat(empty) + ']';
 }

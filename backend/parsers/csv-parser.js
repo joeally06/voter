@@ -7,6 +7,7 @@
 const csv = require('csv-parser');
 const fs = require('fs');
 const readline = require('readline');
+const { sanitizeText, sanitizeZipCode, sanitizePrecinct, sanitizeDate } = require('./parser-utils');
 
 /**
  * Parse a CSV file and extract voter records
@@ -205,6 +206,11 @@ function normalizeCSVRecord(rawRecord, recordNumber, hasHeaders) {
         'pct': 'precinct_number',
         'precinct number': 'precinct_number',
         
+        // State variations (CRITICAL FIX: Add state field mapping)
+        'state': 'state',
+        'st': 'state',
+        'mailstate': 'state',
+        
         // Date of birth variations
         'dob': 'date_of_birth',
         'date_of_birth': 'date_of_birth',
@@ -227,8 +233,9 @@ function normalizeCSVRecord(rawRecord, recordNumber, hasHeaders) {
         voter_id: sanitizeText(normalizedFields.voter_id),
         last_name: sanitizeText(normalizedFields.last_name),
         first_name: sanitizeText(normalizedFields.first_name),
-        address: sanitizeText(normalizedFields.address),
+        address: normalizeAddress(sanitizeText(normalizedFields.address)), // CRITICAL FIX: Add address normalization
         city: sanitizeText(normalizedFields.city),
+        state: sanitizeText(normalizedFields.state), // CRITICAL FIX: Add state field
         zip_code: sanitizeZipCode(normalizedFields.zip_code),
         precinct_number: sanitizePrecinct(normalizedFields.precinct_number),
         date_of_birth: sanitizeDate(normalizedFields.date_of_birth),
@@ -352,118 +359,44 @@ function parseElectionValue(value) {
 }
 
 /**
- * Sanitize text fields - trim, uppercase, remove non-printable characters
- * @param {string|number|null|undefined} value - Text value to sanitize
- * @param {number} [maxLength=255] - Maximum length (characters will be truncated)
- * @returns {string} Sanitized text (uppercase, printable ASCII only) or empty string if input is null/undefined
+ * Normalize address - clean whitespace and standardize abbreviations
+ * CRITICAL FIX: Address normalization for better geocoding quality
+ * @param {string} address - Address string to normalize
+ * @returns {string} Normalized address
  */
-function sanitizeText(value, maxLength = 255) {
-    if (!value || value === null || value === undefined) {
+function normalizeAddress(address) {
+    if (!address || address === '') {
         return '';
     }
     
-    return value
-        .toString()
-        .trim()
-        .replace(/[^\x20-\x7E]/g, '') // Remove non-printable characters
-        .substring(0, maxLength)
-        .toUpperCase();
-}
-
-/**
- * Sanitize and validate ZIP code format
- * Accepts 5-digit or ZIP+4 format (12345 or 12345-6789)
- * @param {string|number|null|undefined} value - ZIP code value
- * @returns {string} Sanitized ZIP code in valid format, or invalid string if format cannot be normalized
- */
-function sanitizeZipCode(value) {
-    if (!value) return '';
+    let normalized = address
+        .replace(/\s+/g, ' ')  // Replace multiple spaces with single space
+        .trim();
     
-    const cleaned = value.toString().trim().replace(/[^0-9-]/g, '');
+    // Normalize common street abbreviations (maintain uppercase from sanitizeText)
+    const abbreviations = {
+        ' STREET': ' ST',
+        ' ROAD': ' RD',
+        ' DRIVE': ' DR',
+        ' AVENUE': ' AVE',
+        ' LANE': ' LN',
+        ' COURT': ' CT',
+        ' CIRCLE': ' CIR',
+        ' BOULEVARD': ' BLVD',
+        ' PARKWAY': ' PKWY',
+        ' HIGHWAY': ' HWY',
+        ' NORTH': ' N',
+        ' SOUTH': ' S',
+        ' EAST': ' E',
+        ' WEST': ' W'
+    };
     
-    // Validate format (5 digits or ZIP+4)
-    if (!/^\d{5}(-\d{4})?$/.test(cleaned)) {
-        // Try to extract just the 5-digit ZIP
-        const match = cleaned.match(/(\d{5})/);
-        if (match) {
-            return match[1];
-        }
-        return cleaned; // Return as-is, will fail validation later
+    for (const [full, abbr] of Object.entries(abbreviations)) {
+        normalized = normalized.replace(new RegExp(full + '$'), abbr);
+        normalized = normalized.replace(new RegExp(full + ' '), abbr + ' ');
     }
     
-    return cleaned;
-}
-
-/**
- * Sanitize and format precinct number with zero-padding
- * @param {string|number|null|undefined} value - Precinct number (e.g., '5', '05', 5)
- * @returns {string} Formatted precinct number (zero-padded to 2 digits, e.g., '05')
- */
-function sanitizePrecinct(value) {
-    if (!value) return '';
-    
-    const cleaned = value.toString().trim().replace(/[^0-9]/g, '');
-    
-    // Zero-pad to 2 digits
-    return cleaned.padStart(2, '0');
-}
-
-/**
- * Sanitize and validate date of birth
- * Accepts ISO-8601 format (YYYY-MM-DD) and common US formats (MM/DD/YYYY)
- * Returns NULL for invalid dates to maintain data quality
- * @param {string|null|undefined} value - Date string to sanitize
- * @returns {string|null} ISO-8601 formatted date (YYYY-MM-DD) or null if invalid
- */
-function sanitizeDate(value) {
-    if (!value || value === null || value === undefined) {
-        return null;
-    }
-    
-    const cleaned = value.toString().trim();
-    if (cleaned === '') {
-        return null;
-    }
-    
-    // Try parsing as-is (ISO-8601 format: YYYY-MM-DD)
-    let parsedDate = new Date(cleaned);
-    
-    // Try parsing MM/DD/YYYY format (common in US data files)
-    if (isNaN(parsedDate.getTime())) {
-        const match = cleaned.match(/^(\d{1,2})[\/ \-](\d{1,2})[\/ \-](\d{4})$/);
-        if (match) {
-            const [, month, day, year] = match;
-            parsedDate = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
-        }
-    }
-    
-    // Validate parsed date is a real date
-    if (isNaN(parsedDate.getTime())) {
-        console.warn(`Invalid date format: ${cleaned}`);
-        return null;
-    }
-    
-    // Check for future dates (birth date cannot be in the future)
-    const today = new Date();
-    if (parsedDate > today) {
-        console.warn(`Future date of birth rejected: ${cleaned}`);
-        return null;
-    }
-    
-    // Check for unrealistic dates (before 1900)
-    // Log warning but don't reject - may be data entry errors we want to preserve
-    const minDate = new Date('1900-01-01');
-    if (parsedDate < minDate) {
-        console.warn(`Unrealistic date of birth (before 1900): ${cleaned}`);
-        // Don't reject, just warn
-    }
-    
-    // Return ISO-8601 format (YYYY-MM-DD)
-    const year = parsedDate.getFullYear();
-    const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
-    const day = String(parsedDate.getDate()).padStart(2, '0');
-    
-    return `${year}-${month}-${day}`;
+    return normalized;
 }
 
 /**

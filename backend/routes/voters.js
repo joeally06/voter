@@ -116,38 +116,10 @@ router.get('/', [
     }
 });
 
-/**
- * GET /api/voters/:id
- * Get detailed information for a specific voter
- */
-router.get('/:id', [
-    param('id').isInt({ min: 1 }).withMessage('Voter ID must be a positive integer'),
-    validate
-], async (req, res, next) => {
-    try {
-        const voterModel = new VoterModel();
-        const voter = await voterModel.findById(req.params.id);
-        
-        if (!voter) {
-            return res.status(404).json({
-                success: false,
-                error: 'Voter not found',
-                message: `No voter with ID ${req.params.id}`
-            });
-        }
-        
-        // Add calculated age and age group
-        voter.age = VoterModel.calculateAge(voter.dateOfBirth);
-        voter.ageGroup = VoterModel.getAgeGroup(voter.dateOfBirth);
-        
-        res.json({
-            success: true,
-            data: voter
-        });
-    } catch (error) {
-        next(error);
-    }
-});
+// IMPORTANT: /search/:query and /precinct/:precinct MUST be registered BEFORE /:id
+// Express evaluates routes in registration order. If /:id comes first,
+// '/search/smith' matches /:id with id="search", and '/precinct/5' matches
+// /:id with id="precinct" — neither named route would ever be reached.
 
 /**
  * GET /api/voters/search/:query
@@ -206,6 +178,39 @@ router.get('/precinct/:precinct', [
             precinct: result.precinct,
             count: result.voters.length,
             voters: votersWithAge
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * GET /api/voters/:id
+ * Get detailed information for a specific voter
+ */
+router.get('/:id', [
+    param('id').isInt({ min: 1 }).withMessage('Voter ID must be a positive integer'),
+    validate
+], async (req, res, next) => {
+    try {
+        const voterModel = new VoterModel();
+        const voter = await voterModel.findById(req.params.id);
+        
+        if (!voter) {
+            return res.status(404).json({
+                success: false,
+                error: 'Voter not found',
+                message: `No voter with ID ${req.params.id}`
+            });
+        }
+        
+        // Add calculated age and age group
+        voter.age = VoterModel.calculateAge(voter.dateOfBirth);
+        voter.ageGroup = VoterModel.getAgeGroup(voter.dateOfBirth);
+        
+        res.json({
+            success: true,
+            data: voter
         });
     } catch (error) {
         next(error);
