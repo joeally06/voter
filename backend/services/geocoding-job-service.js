@@ -14,11 +14,13 @@
 const database = require('../config/database');
 const GeocodingService = require('./geocoding-service');
 const AddressCacheService = require('./address-cache-service');
+const QuotaManager = require('./quota-manager');
 
 class GeocodingJobService {
   constructor() {
     this.geocodingService = new GeocodingService();
     this.cacheService = new AddressCacheService();
+    this.quotaManager = new QuotaManager();
   }
 
   /**
@@ -137,6 +139,44 @@ class GeocodingJobService {
 
       // Process in batches until all addresses are geocoded
       while (processedCount < job.total_records) {
+        // Check monthly quota before processing each batch
+        try {
+          await this.quotaManager.checkMonthlyQuota('geocoding', 1);
+        } catch (quotaError) {
+          if (quotaError.isMonthlyExhausted) {
+            console.warn(`⚠️  Job ${jobId} paused: Monthly geocoding quota exceeded (${quotaError.monthlyUsage}/${quotaError.monthlyLimit})`);
+            await database.run(`
+              UPDATE geocoding_jobs
+              SET status = 'PAUSED',
+                  error_message = ?,
+                  processed_count = ?,
+                  success_count = ?,
+                  failed_count = ?,
+                  cache_hits = ?,
+                  api_calls = ?
+              WHERE id = ?
+            `, [
+              `Monthly quota exceeded (${quotaError.monthlyUsage}/${quotaError.monthlyLimit}). Will resume when quota resets on ${quotaError.resetDate}.`,
+              processedCount, successCount, failedCount, cacheHits, apiCalls, jobId
+            ]);
+            return {
+              success: false,
+              jobId,
+              status: 'PAUSED',
+              reason: 'monthly_quota_exceeded',
+              processedCount,
+              successCount,
+              failedCount,
+              cacheHits,
+              apiCalls,
+              monthlyUsage: quotaError.monthlyUsage,
+              monthlyLimit: quotaError.monthlyLimit,
+              resetDate: quotaError.resetDate
+            };
+          }
+          throw quotaError; // Re-throw non-monthly quota errors
+        }
+
         // Fetch next batch of voters needing geocoding
         let voters;
 
@@ -168,16 +208,26 @@ class GeocodingJobService {
         // Process each voter in the batch
         for (const voter of voters) {
           try {
-            // Warn once per voter if state is missing
-            if (!voter.state) {
-              console.warn(`⚠️ Voter ${voter.id} missing state, defaulting to TN`);
+            // MAJ-06: State validation - reject geocoding if state is missing
+            if (!voter.state || voter.state.trim() === '') {
+              console.error(`❌ Voter ${voter.id} (${voter.voter_id}) missing state - skipping geocoding`);
+              
+              // Log to geocoding_errors table
+              await this.logGeocodingError(jobId, voter, {
+                error_type: 'MISSING_STATE',
+                error: 'State column is empty or null - geocoding skipped for data accuracy'
+              });
+              
+              failedCount++;
+              processedCount++;
+              continue; // Skip geocoding for this voter
             }
 
             // Step 1: Check cache
             const cached = await this.cacheService.getCachedGeocode(
               voter.address,
               voter.city,
-              voter.state || 'TN',
+              voter.state,
               voter.zip_code
             );
             
@@ -190,30 +240,34 @@ class GeocodingJobService {
                 success: cached.latitude != null && cached.longitude != null
               };
               cacheHits++;
+              // Track cache hit in api_usage table
+              await this.quotaManager.incrementCacheHit('geocoding', 1);
               console.log(`Cache hit for voter ${voter.id}: ${voter.address}`);
             } else {
               // Step 2: Call Google Maps API
-              const state = voter.state || 'TN';
-              console.log(`Geocoding voter ${voter.id}: ${voter.address}, ${voter.city}, ${state} ${voter.zip_code}`);
+              // MAJ-06: Use state without fallback (already validated above)
+              console.log(`Geocoding voter ${voter.id}: ${voter.address}, ${voter.city}, ${voter.state} ${voter.zip_code}`);
               
               geocodeResult = await this.geocodingService.geocodeWithRetry(
                 voter.address,
                 { 
                   locality: voter.city, 
-                  administrative_area: state,
+                  administrative_area: voter.state,
                   postal_code: voter.zip_code 
                 },
                 3 // Max 3 retries
               );
               
               apiCalls++;
+              // Track cache miss in api_usage table
+              await this.quotaManager.incrementCacheMiss('geocoding', 1);
               
               // Step 3: Store in cache if successful
               if (geocodeResult.success) {
                 await this.cacheService.setCachedGeocode(
                   voter.address,
                   voter.city,
-                  voter.state || 'TN',
+                  voter.state,
                   voter.zip_code,
                   geocodeResult
                 );

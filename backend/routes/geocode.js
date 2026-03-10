@@ -21,11 +21,46 @@ const database = require('../config/database');
 const GeocodingService = require('../services/geocoding-service');
 const AddressCacheService = require('../services/address-cache-service');
 const GeocodingJobService = require('../services/geocoding-job-service');
+const QuotaManager = require('../services/quota-manager');
 
-// Initialize services
+// Initialize services (shared instances)
 const jobService = new GeocodingJobService();
 const geocodingService = new GeocodingService();
 const cacheService = new AddressCacheService();
+const quotaManager = new QuotaManager();
+
+/**
+ * Transform voter fields from snake_case to camelCase
+ * Ensures consistent API responses regardless of data source
+ * MAJ-01: Field Name Standardization
+ */
+function transformVoterFields(voter) {
+  if (!voter) return voter;
+  return {
+    ...voter,
+    firstName: voter.first_name || voter.firstName,
+    lastName: voter.last_name || voter.lastName,
+    voterId: voter.voter_id || voter.voterId,
+    zipCode: voter.zip_code || voter.zipCode,
+    precinctNumber: voter.precinct_number || voter.precinctNumber,
+    dateOfBirth: voter.date_of_birth || voter.dateOfBirth,
+    superVoter: voter.super_voter !== undefined ? voter.super_voter : voter.superVoter,
+    createdAt: voter.created_at || voter.createdAt,
+    updatedAt: voter.updated_at || voter.updatedAt,
+    geocodingQuality: voter.geocoding_quality || voter.geocodingQuality,
+    // Remove snake_case properties
+    first_name: undefined,
+    last_name: undefined,
+    voter_id: undefined,
+    zip_code: undefined,
+    precinct_number: undefined,
+    date_of_birth: undefined,
+    super_voter: undefined,
+    created_at: undefined,
+    updated_at: undefined,
+    geocoding_quality: undefined
+  };
+}
 
 /**
  * POST /api/geocode/batch
@@ -60,7 +95,28 @@ router.post('/batch', async (req, res, next) => {
             });
         }
         
-        // Create geocoding job
+        // Check monthly quota BEFORE creating the job
+        const monthlyStatus = await quotaManager.getMonthlyQuotaStatus('geocoding');
+        const estimatedApiCalls = Math.ceil(targetVoterIds.length * 0.2); // ~80% cache hit rate
+
+        if (monthlyStatus.isExhausted || (monthlyStatus.used + estimatedApiCalls > monthlyStatus.limit)) {
+            return res.status(429).json({
+                success: false,
+                error: monthlyStatus.isExhausted
+                    ? 'Monthly geocoding quota exceeded'
+                    : 'Insufficient monthly geocoding quota for this batch',
+                monthlyUsage: monthlyStatus.used,
+                monthlyLimit: monthlyStatus.limit,
+                remaining: monthlyStatus.remaining,
+                estimatedNeeded: estimatedApiCalls,
+                resetsOn: monthlyStatus.resetDate,
+                suggestion: monthlyStatus.isExhausted
+                    ? 'Wait until quota resets on the 1st of next month'
+                    : `Reduce batch to ~${Math.floor(monthlyStatus.remaining * 5)} addresses (est. ${monthlyStatus.remaining} API calls) or wait until quota resets`
+            });
+        }
+        
+        // Create geocoding job (only after quota check passes)
         const jobId = await jobService.createJob(targetVoterIds, options);
         
         // Estimate duration
@@ -124,7 +180,7 @@ router.post('/single', async (req, res, next) => {
     try {
         const { address, city, state, zipCode } = req.body;
         
-        // Validation
+        // MAJ-06: Validate required fields including state
         if (!address || !city || !zipCode) {
             return res.status(400).json({
                 success: false,
@@ -132,11 +188,18 @@ router.post('/single', async (req, res, next) => {
             });
         }
         
+        if (!state || state.trim() === '') {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required field: state - required for geocoding accuracy'
+            });
+        }
+        
         // Check cache first
         const cached = await cacheService.getCachedGeocode(
             address, 
             city, 
-            state || 'TN', 
+            state, 
             zipCode
         );
         
@@ -150,7 +213,7 @@ router.post('/single', async (req, res, next) => {
         // Call geocoding API
         const result = await geocodingService.geocodeAddress(address, {
             locality: city,
-            administrative_area: state || 'TN',
+            administrative_area: state,
             postal_code: zipCode
         });
         
@@ -159,7 +222,7 @@ router.post('/single', async (req, res, next) => {
             await cacheService.setCachedGeocode(
                 address, 
                 city, 
-                state || 'TN', 
+                state, 
                 zipCode, 
                 result
             );
@@ -198,11 +261,14 @@ router.get('/failed/:jobId', async (req, res, next) => {
         
         const errors = await jobService.getFailedAddresses(jobId);
         
+        // MAJ-01: Transform fields to camelCase
+        const transformedErrors = errors.map(transformVoterFields);
+        
         res.json({
             success: true,
             jobId,
-            failedCount: errors.length,
-            errors
+            failedCount: transformedErrors.length,
+            errors: transformedErrors
         });
         
     } catch (error) {
@@ -317,7 +383,10 @@ router.get('/stats', async (req, res, next) => {
         // Get API usage today
         const today = new Date().toISOString().split('T')[0];
         const todayUsage = await geocodingService.getDailyUsage(today);
-        const dailyLimit = parseInt(process.env.DAILY_QUOTA_LIMIT) || 10000;
+        const dailyLimit = parseInt(process.env.DAILY_GEOCODING_QUOTA || process.env.DAILY_QUOTA_LIMIT) || 333;
+        
+        // Get monthly quota status
+        const monthlyGeocoding = await quotaManager.getMonthlyQuotaStatus('geocoding');
         
         res.json({
             success: true,
@@ -336,7 +405,8 @@ router.get('/stats', async (req, res, next) => {
                 today: todayUsage,
                 dailyLimit,
                 percentUsed: parseFloat(((todayUsage / dailyLimit) * 100).toFixed(1))
-            }
+            },
+            monthlyQuota: monthlyGeocoding
         });
         
     } catch (error) {
@@ -418,10 +488,13 @@ router.get('/review', async (req, res, next) => {
             LIMIT ?
         `, [minQuality, maxQuality, limit]);
         
+        // MAJ-01: Transform fields to camelCase
+        const transformedVoters = voters.map(transformVoterFields);
+        
         res.json({
             success: true,
-            count: voters.length,
-            voters
+            count: transformedVoters.length,
+            voters: transformedVoters
         });
         
     } catch (error) {
@@ -463,6 +536,58 @@ router.get('/status', async (req, res, next) => {
         // Redirect to new endpoint
         res.redirect(`/api/geocode/jobs/${jobId}`);
         
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * POST /api/geocode/track-map-load
+ * Track a Dynamic Maps load for monthly quota enforcement
+ */
+router.post('/track-map-load', async (req, res, next) => {
+    try {
+
+        // Check monthly limit before allowing map load
+        const status = await quotaManager.getMonthlyQuotaStatus('dynamic_maps');
+
+        if (status.isExhausted) {
+            return res.status(429).json({
+                success: false,
+                error: 'Monthly Dynamic Maps quota exceeded',
+                monthlyUsage: status.used,
+                monthlyLimit: status.limit,
+                resetsOn: status.resetDate
+            });
+        }
+
+        // Increment counter
+        await quotaManager.incrementApiCall('dynamic_maps', 1);
+
+        // Return updated status
+        const updatedStatus = await quotaManager.getMonthlyQuotaStatus('dynamic_maps');
+
+        res.json({
+            success: true,
+            quota: updatedStatus
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * GET /api/geocode/monthly-quota
+ * Get monthly quota status for all tracked APIs
+ */
+router.get('/monthly-quota', async (req, res, next) => {
+    try {
+        const monthlyStatus = await quotaManager.getMonthlyQuotaStatus();
+
+        res.json({
+            success: true,
+            monthly: monthlyStatus
+        });
     } catch (error) {
         next(error);
     }

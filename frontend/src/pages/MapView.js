@@ -7,7 +7,8 @@ import {
   calcRoute, saveRoute, fetchRoute, deleteRoute,
   fetchQuotaStatus,
   startBatchGeocode, fetchGeoJob, fetchGeoStats,
-  fetchGeoReview, retryGeoJob, fetchGeoFailed
+  fetchGeoReview, retryGeoJob, fetchGeoFailed,
+  trackMapLoad, fetchMonthlyQuota
 } from '../api/client.js';
 import {
   sectionHeading, spinner, errorBox, fmt, pct, escapeHtml, statCard, emptyState
@@ -124,6 +125,13 @@ export async function renderMap(container) {
       streetViewControl: false,
       styles: document.documentElement.classList.contains('dark') ? darkMapStyle : [],
     });
+
+    // Track this Dynamic Maps load against monthly quota
+    try {
+      await trackMapLoad();
+    } catch (e) {
+      console.warn('Failed to track map load:', e.message);
+    }
 
     infoWindow = new google.maps.InfoWindow();
 
@@ -1074,7 +1082,18 @@ async function loadGeocodingStats(container) {
     const pending = stats.pendingVoters || 0;
     const quality = stats.averageQualityScore || '--';
     const apiToday = stats.apiUsage?.today || 0;
-    const apiLimit = stats.apiUsage?.dailyLimit || 10000;
+    const apiLimit = stats.apiUsage?.dailyLimit || 333;
+    const monthly = stats.monthlyQuota || {};
+    const monthlyUsed = monthly.used || 0;
+    const monthlyLimit = monthly.limit || 10000;
+    const monthlyRemaining = monthly.remaining || (monthlyLimit - monthlyUsed);
+    const monthlyPct = Math.min((monthlyUsed / monthlyLimit) * 100, 100);
+    const monthlyBarColor = monthlyPct >= 95 ? 'bg-red-600' : monthlyPct >= 80 ? 'bg-red-500' : monthlyPct >= 50 ? 'bg-amber-500' : 'bg-green-500';
+    const monthlyWarning = monthlyPct >= 95
+      ? `<div class="mt-2 p-2 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded text-xs text-red-700 dark:text-red-300 font-medium">\u26d4 Only ${fmt(monthlyRemaining)} geocoding requests remaining this month</div>`
+      : monthlyPct >= 80
+        ? `<div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-700 dark:text-amber-300 font-medium">\u26a0\ufe0f Approaching monthly limit: ${fmt(monthlyUsed)}/${fmt(monthlyLimit)}</div>`
+        : '';
 
     statsEl.innerHTML = `
       <div class="space-y-3">
@@ -1097,6 +1116,15 @@ async function loadGeocodingStats(container) {
         <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
           <div class="bg-amber-500 h-1.5 rounded-full" style="width: ${Math.min((apiToday / apiLimit) * 100, 100)}%"></div>
         </div>
+        <div class="text-xs text-gray-500 flex justify-between mt-2">
+          <span>Monthly Usage</span>
+          <span>${fmt(monthlyUsed)} / ${fmt(monthlyLimit)}</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+          <div class="${monthlyBarColor} h-1.5 rounded-full" style="width: ${monthlyPct}%"></div>
+        </div>
+        <p class="text-xs text-center text-gray-500">${fmt(monthlyRemaining)} monthly requests remaining</p>
+        ${monthlyWarning}
       </div>
     `;
 
@@ -1289,22 +1317,78 @@ async function loadQuotaStatus(container) {
 
   try {
     const quota = await fetchQuotaStatus();
-    const used = quota.used || 0;
-    const limit = quota.limit || quota.dailyLimit || 10000;
-    const remaining = quota.remaining || (limit - used);
-    const usagePct = Math.min((used / limit) * 100, 100);
-    const barColor = usagePct > 80 ? 'bg-red-500' : usagePct > 50 ? 'bg-amber-500' : 'bg-green-500';
+    
+    // Daily status
+    const geocodingDaily = quota.geocoding || {};
+    const dailyUsed = geocodingDaily.used || 0;
+    const dailyLimit = geocodingDaily.quota || 333;
+    const dailyRemaining = geocodingDaily.remaining || (dailyLimit - dailyUsed);
+    const dailyPct = Math.min((dailyUsed / dailyLimit) * 100, 100);
+    const dailyBarColor = dailyPct > 80 ? 'bg-red-500' : dailyPct > 50 ? 'bg-amber-500' : 'bg-green-500';
+
+    // Monthly status
+    const monthly = quota.monthly || {};
+    const geoMonthly = monthly.geocoding || {};
+    const dmMonthly = monthly.distance_matrix || {};
+    const mapsMonthly = monthly.dynamic_maps || {};
+    
+    const geoMonthlyUsed = geoMonthly.used || 0;
+    const geoMonthlyLimit = geoMonthly.limit || 10000;
+    const geoMonthlyPct = Math.min((geoMonthlyUsed / geoMonthlyLimit) * 100, 100);
+    const geoMonthlyBarColor = geoMonthlyPct >= 95 ? 'bg-red-600' : geoMonthlyPct >= 80 ? 'bg-red-500' : geoMonthlyPct >= 50 ? 'bg-amber-500' : 'bg-green-500';
+
+    const dmMonthlyUsed = dmMonthly.used || 0;
+    const dmMonthlyLimit = dmMonthly.limit || 10000;
+    const dmMonthlyPct = Math.min((dmMonthlyUsed / dmMonthlyLimit) * 100, 100);
+    const dmMonthlyBarColor = dmMonthlyPct >= 95 ? 'bg-red-600' : dmMonthlyPct >= 80 ? 'bg-red-500' : dmMonthlyPct >= 50 ? 'bg-amber-500' : 'bg-green-500';
+
+    const mapsUsed = mapsMonthly.used || 0;
+    const mapsLimit = mapsMonthly.limit || 10000;
+    const mapsPct = Math.min((mapsUsed / mapsLimit) * 100, 100);
+    const mapsBarColor = mapsPct >= 95 ? 'bg-red-600' : mapsPct >= 80 ? 'bg-red-500' : mapsPct >= 50 ? 'bg-amber-500' : 'bg-green-500';
+
+    // Monthly warning banner
+    const maxMonthlyPct = Math.max(geoMonthlyPct, dmMonthlyPct, mapsPct);
+    const monthlyWarning = maxMonthlyPct >= 100
+      ? `<div class="mb-3 p-2 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded text-xs text-red-700 dark:text-red-300 font-medium">\u26d4 Monthly quota exceeded! Resets on ${geoMonthly.resetDate || 'the 1st'}</div>`
+      : maxMonthlyPct >= 80
+        ? `<div class="mb-3 p-2 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-700 dark:text-amber-300 font-medium">\u26a0\ufe0f Approaching monthly API limits (${Math.round(maxMonthlyPct)}% used)</div>`
+        : '';
 
     quotaEl.innerHTML = `
-      <div class="space-y-2">
+      <div class="space-y-3">
+        ${monthlyWarning}
+        <p class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Daily (Geocoding)</p>
         <div class="flex justify-between text-xs">
-          <span class="text-gray-600 dark:text-gray-400">Daily Usage</span>
-          <span class="font-medium text-gray-900 dark:text-white">${fmt(used)} / ${fmt(limit)}</span>
+          <span class="text-gray-600 dark:text-gray-400">Today</span>
+          <span class="font-medium text-gray-900 dark:text-white">${fmt(dailyUsed)} / ${fmt(dailyLimit)}</span>
         </div>
         <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-          <div class="${barColor} h-2 rounded-full transition-all" style="width: ${usagePct}%"></div>
+          <div class="${dailyBarColor} h-2 rounded-full transition-all" style="width: ${dailyPct}%"></div>
         </div>
-        <p class="text-xs text-center text-gray-500">${fmt(remaining)} requests remaining</p>
+
+        <p class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mt-2">Monthly Limits (Free Tier: 10,000/mo)</p>
+        <div class="flex justify-between text-xs">
+          <span class="text-gray-600 dark:text-gray-400">Geocoding</span>
+          <span class="font-medium text-gray-900 dark:text-white">${fmt(geoMonthlyUsed)} / ${fmt(geoMonthlyLimit)}</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+          <div class="${geoMonthlyBarColor} h-1.5 rounded-full" style="width: ${geoMonthlyPct}%"></div>
+        </div>
+        <div class="flex justify-between text-xs">
+          <span class="text-gray-600 dark:text-gray-400">Distance Matrix</span>
+          <span class="font-medium text-gray-900 dark:text-white">${fmt(dmMonthlyUsed)} / ${fmt(dmMonthlyLimit)}</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+          <div class="${dmMonthlyBarColor} h-1.5 rounded-full" style="width: ${dmMonthlyPct}%"></div>
+        </div>
+        <div class="flex justify-between text-xs">
+          <span class="text-gray-600 dark:text-gray-400">Dynamic Maps</span>
+          <span class="font-medium text-gray-900 dark:text-white">${fmt(mapsUsed)} / ${fmt(mapsLimit)}</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+          <div class="${mapsBarColor} h-1.5 rounded-full" style="width: ${mapsPct}%"></div>
+        </div>
       </div>
     `;
   } catch (err) {
@@ -1359,7 +1443,7 @@ async function showFailedAddresses(container) {
           <div class="flex items-start gap-2 py-1 border-b border-gray-100 dark:border-gray-800 last:border-0">
             <span class="text-red-400 mt-0.5">✗</span>
             <div>
-              <p class="text-gray-700 dark:text-gray-300">${escapeHtml(f.first_name || '')} ${escapeHtml(f.last_name || '')} — ${escapeHtml(f.address || 'Unknown address')}${f.city ? ', ' + escapeHtml(f.city) : ''}${f.zip_code ? ' ' + escapeHtml(f.zip_code) : ''}</p>
+              <p class="text-gray-700 dark:text-gray-300">${escapeHtml(f.firstName || '')} ${escapeHtml(f.lastName || '')} — ${escapeHtml(f.address || 'Unknown address')}${f.city ? ', ' + escapeHtml(f.city) : ''}${f.zipCode ? ' ' + escapeHtml(f.zipCode) : ''}</p>
               <p class="text-gray-400 text-[10px]">${escapeHtml(f.error_type || 'UNKNOWN')}: ${escapeHtml(f.error_message || 'Geocoding failed')}</p>
             </div>
           </div>
@@ -1400,7 +1484,7 @@ async function loadGeoReview(container) {
           <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
             ${voters.map(v => `
               <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                <td class="px-3 py-2 whitespace-nowrap">${escapeHtml(v.first_name || '')} ${escapeHtml(v.last_name || '')}</td>
+                <td class="px-3 py-2 whitespace-nowrap">${escapeHtml(v.firstName || '')} ${escapeHtml(v.lastName || '')}</td>
                 <td class="px-3 py-2 text-gray-500">${escapeHtml(v.address || '')} ${escapeHtml(v.city || '')}</td>
                 <td class="px-3 py-2">
                   <span class="px-2 py-0.5 rounded-full text-xs font-medium ${

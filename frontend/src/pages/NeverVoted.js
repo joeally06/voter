@@ -96,7 +96,7 @@ async function loadData(container) {
     state.total = res.pagination?.total || res.total || 0;
 
     const columns = [
-      { label: 'Name',     render: r => `${escapeHtml(r.last_name || r.lastName)}, ${escapeHtml(r.first_name || r.firstName)}` },
+      { label: 'Name',     render: r => `${escapeHtml(r.lastName)}, ${escapeHtml(r.firstName)}` },
       { label: 'Age',      render: r => r.age || '—' },
       { label: 'Address',  render: r => escapeHtml(r.address || '—') },
       { label: 'City',     render: r => escapeHtml(r.city || '—') },
