@@ -1160,6 +1160,238 @@ class AnalyticsService {
       throw new Error('Failed to analyze non-voters by precinct');
     }
   }
+
+  /**
+   * Return all distinct election codes that have at least one voted record.
+   * Ordered newest-first using the same E_* numeric-suffix logic.
+   * @returns {Promise<string[]>} e.g. ['E_5', 'E_4', 'E_3', 'E_2', 'E_1']
+   */
+  async getElectionCodes() {
+    const cacheKey = 'election_codes';
+    const cached = this._getFromCache(cacheKey);
+    if (cached) return cached;
+
+    const rows = await this.db.all(`
+      SELECT election_code
+      FROM election_history
+      WHERE voted = 1
+      GROUP BY election_code
+      ORDER BY
+        CASE
+          WHEN election_code LIKE 'E_%'
+          THEN CAST(SUBSTR(election_code, 3) AS INTEGER)
+          ELSE 0
+        END DESC,
+        election_code DESC
+    `);
+
+    const codes = rows.map(r => r.election_code);
+    this._setCache(cacheKey, codes, this.cacheTTL.analytics);
+    return codes;
+  }
+
+  /**
+   * Get breakdown of the last (most recent) election
+   * Shows who voted, their age distribution, and precinct distribution
+   * 
+   * @param {Object} filters - Query filters
+   * @param {string} [filters.precinct] - Optional precinct filter
+   * @param {string} [filters.electionCode] - Optional specific election code (skips auto-detect)
+   * @returns {Promise<Object>} Last election breakdown data
+   */
+  async getLastElectionBreakdown(filters = {}) {
+    const cacheKey = this._getCacheKey('last_election_breakdown', filters);
+    const cached = this._getFromCache(cacheKey);
+    if (cached) return cached;
+
+    const startTime = Date.now();
+
+    try {
+      let electionCode;
+
+      // If caller supplied a specific election code, use it directly
+      if (filters.electionCode) {
+        electionCode = filters.electionCode;
+      } else {
+        // Step 1: Determine the most recent election code (existing behaviour)
+        const lastElection = await this.db.get(`
+          SELECT election_code 
+          FROM election_history 
+          WHERE voted = 1
+          GROUP BY election_code 
+          ORDER BY 
+            CASE 
+              WHEN election_code LIKE 'E_%' 
+              THEN CAST(SUBSTR(election_code, 3) AS INTEGER) 
+              ELSE 0 
+            END DESC,
+            election_code DESC
+          LIMIT 1
+        `);
+
+        if (!lastElection) {
+          return { election: null, ageBreakdown: [], precinctBreakdown: [], summary: null, queryTime: Date.now() - startTime };
+        }
+        electionCode = lastElection.election_code;
+      }
+      let precinctFilter = '';
+      const params = [electionCode];
+
+      if (filters.precinct) {
+        precinctFilter = 'AND v.precinct_number = ?';
+        params.push(filters.precinct);
+      }
+
+      // Step 2: Run all breakdown queries in parallel
+      const [electionStats, ageBreakdown, precinctBreakdown] = await Promise.all([
+        // Overall election stats (use COUNT(DISTINCT) to handle duplicate election_history rows)
+        this.db.get(`
+          SELECT 
+            COUNT(DISTINCT v.id) as totalRegistered,
+            COUNT(DISTINCT CASE WHEN e.voted = 1 THEN v.id END) as totalVoted,
+            COUNT(DISTINCT CASE WHEN e.voted = 1 AND e.early_voted = 1 THEN v.id END) as earlyVoted,
+            COUNT(DISTINCT CASE WHEN e.voted = 1 AND (e.early_voted = 0 OR e.early_voted IS NULL) THEN v.id END) as electionDayVoted
+          FROM voters v
+          LEFT JOIN election_history e ON v.voter_id = e.voter_id AND e.election_code = ?
+          WHERE 1=1 ${precinctFilter}
+        `, params),
+
+        // Age breakdown of voters in this election
+        this.db.all(`
+          SELECT 
+            CASE 
+              WHEN v.date_of_birth IS NULL THEN 'Unknown'
+              WHEN CAST((julianday('now') - julianday(v.date_of_birth)) / 365.25 AS INTEGER) < 18 THEN 'Under 18'
+              WHEN CAST((julianday('now') - julianday(v.date_of_birth)) / 365.25 AS INTEGER) BETWEEN 18 AND 24 THEN '18-24'
+              WHEN CAST((julianday('now') - julianday(v.date_of_birth)) / 365.25 AS INTEGER) BETWEEN 25 AND 34 THEN '25-34'
+              WHEN CAST((julianday('now') - julianday(v.date_of_birth)) / 365.25 AS INTEGER) BETWEEN 35 AND 44 THEN '35-44'
+              WHEN CAST((julianday('now') - julianday(v.date_of_birth)) / 365.25 AS INTEGER) BETWEEN 45 AND 54 THEN '45-54'
+              WHEN CAST((julianday('now') - julianday(v.date_of_birth)) / 365.25 AS INTEGER) BETWEEN 55 AND 64 THEN '55-64'
+              WHEN CAST((julianday('now') - julianday(v.date_of_birth)) / 365.25 AS INTEGER) BETWEEN 65 AND 74 THEN '65-74'
+              WHEN CAST((julianday('now') - julianday(v.date_of_birth)) / 365.25 AS INTEGER) >= 75 THEN '75+'
+              ELSE 'Unknown'
+            END AS ageGroup,
+            COUNT(DISTINCT v.id) as count,
+            COUNT(DISTINCT CASE WHEN e.early_voted = 1 THEN v.id END) as earlyVoted
+          FROM voters v
+          JOIN election_history e ON v.voter_id = e.voter_id
+          WHERE e.election_code = ? AND e.voted = 1 ${precinctFilter}
+          GROUP BY ageGroup
+          ORDER BY 
+            CASE ageGroup
+              WHEN 'Under 18' THEN 1
+              WHEN '18-24' THEN 2
+              WHEN '25-34' THEN 3
+              WHEN '35-44' THEN 4
+              WHEN '45-54' THEN 5
+              WHEN '55-64' THEN 6
+              WHEN '65-74' THEN 7
+              WHEN '75+' THEN 8
+              WHEN 'Unknown' THEN 9
+            END
+        `, params),
+
+        // Precinct breakdown (JOIN-based approach instead of correlated subquery)
+        // NOTE: Alias must NOT be 'voted' — SQLite resolves HAVING 'voted' to the
+        //       e.voted column instead of the aggregate alias, filtering out all rows.
+        this.db.all(`
+          SELECT 
+            v.precinct_number as precinctNumber,
+            p.name as precinctName,
+            COUNT(DISTINCT CASE WHEN e.voted = 1 THEN v.id END) as votedCount,
+            reg.cnt as registered,
+            COUNT(DISTINCT CASE WHEN e.voted = 1 AND e.early_voted = 1 THEN v.id END) as earlyVotedCount,
+            COUNT(DISTINCT CASE WHEN e.voted = 1 AND e.party_code = 'D' THEN v.id END) as democrat,
+            COUNT(DISTINCT CASE WHEN e.voted = 1 AND e.party_code = 'R' THEN v.id END) as republican,
+            COUNT(DISTINCT CASE WHEN e.voted = 1 AND e.party_code = 'I' THEN v.id END) as independent,
+            COUNT(DISTINCT CASE WHEN e.voted = 1 AND (e.party_code IS NULL OR e.party_code = '') THEN v.id END) as unknownParty
+          FROM voters v
+          LEFT JOIN election_history e ON v.voter_id = e.voter_id AND e.election_code = ?
+          LEFT JOIN precincts p ON v.precinct_number = p.precinct_number
+          LEFT JOIN (SELECT precinct_number, COUNT(*) as cnt FROM voters GROUP BY precinct_number) reg
+            ON v.precinct_number = reg.precinct_number
+          WHERE 1=1 ${precinctFilter}
+          GROUP BY v.precinct_number, p.name
+          HAVING votedCount > 0
+          ORDER BY v.precinct_number
+        `, params)
+      ]);
+
+      // Format results
+      const totalVoted = electionStats?.totalVoted || 0;
+      const totalRegistered = electionStats?.totalRegistered || 0;
+
+      // Find summary stats
+      const sortedPrecincts = [...precinctBreakdown].sort((a, b) => {
+        const rateA = a.registered > 0 ? a.votedCount / a.registered : 0;
+        const rateB = b.registered > 0 ? b.votedCount / b.registered : 0;
+        return rateB - rateA;
+      });
+      const knownAgeGroups = ageBreakdown.filter(a => a.ageGroup !== 'Unknown');
+      const largestAgeGroup = knownAgeGroups.reduce((max, g) => g.count > (max?.count || 0) ? g : max, null);
+
+      // Compute median age group: the age bracket containing the median voter by count
+      let medianAgeGroup = null;
+      if (knownAgeGroups.length > 0) {
+        const totalKnown = knownAgeGroups.reduce((sum, g) => sum + g.count, 0);
+        const medianTarget = Math.ceil(totalKnown / 2);
+        let cumulative = 0;
+        for (const g of knownAgeGroups) {
+          cumulative += g.count;
+          if (cumulative >= medianTarget) {
+            medianAgeGroup = g.ageGroup;
+            break;
+          }
+        }
+      }
+
+      const result = {
+        election: {
+          electionCode,
+          totalRegistered,
+          totalVoted,
+          turnoutRate: totalRegistered > 0 ? parseFloat((totalVoted / totalRegistered * 100).toFixed(2)) : 0,
+          earlyVoted: electionStats?.earlyVoted || 0,
+          electionDayVoted: electionStats?.electionDayVoted || 0,
+          earlyVoteRate: totalVoted > 0 ? parseFloat(((electionStats?.earlyVoted || 0) / totalVoted * 100).toFixed(2)) : 0
+        },
+        ageBreakdown: ageBreakdown.map(a => ({
+          ageGroup: a.ageGroup,
+          count: a.count,
+          percentage: totalVoted > 0 ? parseFloat((a.count / totalVoted * 100).toFixed(2)) : 0,
+          earlyVoteRate: a.count > 0 ? parseFloat((a.earlyVoted / a.count * 100).toFixed(2)) : 0
+        })),
+        precinctBreakdown: precinctBreakdown.map(p => ({
+          precinctNumber: p.precinctNumber,
+          precinctName: p.precinctName || `Precinct ${p.precinctNumber}`,
+          voted: p.votedCount,
+          registered: p.registered,
+          turnoutRate: p.registered > 0 ? parseFloat((p.votedCount / p.registered * 100).toFixed(2)) : 0,
+          earlyVoteRate: p.votedCount > 0 ? parseFloat((p.earlyVotedCount / p.votedCount * 100).toFixed(2)) : 0,
+          partyBreakdown: {
+            democrat: p.democrat,
+            republican: p.republican,
+            independent: p.independent,
+            unknown: p.unknownParty
+          }
+        })),
+        summary: {
+          highestTurnoutPrecinct: sortedPrecincts.length > 0 ? sortedPrecincts[0].precinctNumber : null,
+          lowestTurnoutPrecinct: sortedPrecincts.length > 0 ? sortedPrecincts[sortedPrecincts.length - 1].precinctNumber : null,
+          largestAgeGroup: largestAgeGroup?.ageGroup || null,
+          medianAgeGroup: medianAgeGroup
+        },
+        queryTime: Date.now() - startTime
+      };
+
+      this._setCache(cacheKey, result, this.cacheTTL.analytics);
+      return result;
+
+    } catch (error) {
+      console.error('Last election breakdown error:', error);
+      throw new Error('Failed to analyze last election breakdown');
+    }
+  }
 }
 
 module.exports = AnalyticsService;

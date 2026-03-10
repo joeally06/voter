@@ -124,6 +124,8 @@ export const fetchDemographics    = (p = {}) => get('/analytics/demographics', p
 export const fetchEngagement      = (p = {}) => get('/analytics/engagement-levels', p);
 export const fetchNonVoterDemo    = (p = {}) => get('/analytics/non-voter-demographics', p);
 export const fetchNonVoterPrecinct = ()      => get('/analytics/non-voters-by-precinct');
+export const fetchLastElectionBreakdown = (p = {}) => get('/analytics/last-election-breakdown', p);
+export const fetchElectionCodes = () => get('/analytics/election-codes');
 
 // ── Precincts ─────────────────────────────────────────────────────
 
@@ -140,6 +142,8 @@ export const manualGeocode     = (voterId, body) => put(`/geocode/manual/${voter
 export const fetchGeoStats     = ()     => get('/geocode/stats');
 export const retryGeoJob       = (id, body) => post(`/geocode/retry/${id}`, body);
 export const fetchGeoReview    = (p)    => get('/geocode/review', p);
+export const trackMapLoad      = ()     => post('/geocode/track-map-load');
+export const fetchMonthlyQuota = ()     => get('/geocode/monthly-quota');
 
 // ── Route Planning ────────────────────────────────────────────────
 

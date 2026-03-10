@@ -151,7 +151,19 @@ router.post('/calculate', [
       let statusCode = 429; // Default: Too Many Requests
       let errorType = 'API quota exceeded';
       
-      if (error.isExhausted) {
+      if (error.isMonthlyExhausted) {
+        // Monthly quota exhausted
+        statusCode = 429;
+        errorType = 'Monthly quota exceeded';
+        return res.status(statusCode).json({
+          success: false,
+          error: errorType,
+          message: error.message,
+          monthlyUsage: error.monthlyUsage,
+          monthlyLimit: error.monthlyLimit,
+          resetsOn: error.resetDate
+        });
+      } else if (error.isExhausted) {
         // Quota is actually exhausted - use 403 Forbidden
         statusCode = 403;
         errorType = 'Daily quota exhausted';
@@ -246,7 +258,19 @@ router.post('/distance-matrix', [
       let statusCode = 429; // Default: Too Many Requests
       let errorType = 'API quota exceeded';
       
-      if (error.isExhausted) {
+      if (error.isMonthlyExhausted) {
+        // Monthly quota exhausted
+        statusCode = 429;
+        errorType = 'Monthly quota exceeded';
+        return res.status(statusCode).json({
+          success: false,
+          error: errorType,
+          message: error.message,
+          monthlyUsage: error.monthlyUsage,
+          monthlyLimit: error.monthlyLimit,
+          resetsOn: error.resetDate
+        });
+      } else if (error.isExhausted) {
         // Quota is actually exhausted - use 403 Forbidden
         statusCode = 403;
         errorType = 'Daily quota exhausted';
@@ -291,6 +315,7 @@ router.get('/quota-status', async (req, res) => {
   try {
     const quotaManager = new QuotaManager();
     const status = await quotaManager.getAllQuotaStatus();
+    const monthlyStatus = await quotaManager.getMonthlyQuotaStatus();
 
     // Provide data in both nested and direct formats for backward compatibility
     res.json({
@@ -303,7 +328,9 @@ router.get('/quota-status', async (req, res) => {
       // Direct access for convenience (backward compatibility)
       distance_matrix: status.quotas.distance_matrix,
       geocoding: status.quotas.geocoding,
-      directions: status.quotas.directions
+      directions: status.quotas.directions,
+      // Monthly data
+      monthly: monthlyStatus
     });
 
   } catch (error) {

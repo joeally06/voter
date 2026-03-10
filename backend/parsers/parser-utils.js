@@ -51,14 +51,53 @@ function sanitizeZipCode(value) {
  * Sanitize precinct number — PRESERVE ORIGINAL FORMAT
  * CRITICAL FIX: Do NOT strip hyphens to preserve district-precinct format like "2-4"
  * Obion County uses format: "{district}-{precinct}" (e.g., "2-4", "1-3")
- * @param {string|number|null|undefined} value - Precinct number (e.g., '2-4', '1-3')
+ * 
+ * EXCEL DATE CORRECTION: When CSV files are opened and saved in Excel, precinct
+ * values like "2-4" get auto-formatted as dates (e.g., "4-Feb", "1-Feb").
+ * This function detects and reverses that corruption:
+ *   "4-Feb" → month=Feb=2, day=4 → "2-4"
+ *   "1-Feb" → month=Feb=2, day=1 → "2-1"
+ * 
+ * @param {string|number|null|undefined} value - Precinct number (e.g., '2-4', '1-3', '4-Feb')
  * @returns {string} Sanitized precinct preserving hyphens and original format
  */
 function sanitizePrecinct(value) {
     if (!value) return '';
     
+    const trimmed = value.toString().trim();
+    
+    // Detect Excel date corruption: "D-Mon" format (e.g., "4-Feb", "1-Jan")
+    const monthAbbreviations = {
+        'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+        'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
+    };
+    
+    // Match "D-Mon" pattern (e.g., "4-Feb", "12-Mar")
+    const dayMonthMatch = trimmed.match(/^(\d{1,2})-([A-Za-z]{3})$/);
+    if (dayMonthMatch) {
+        const day = dayMonthMatch[1];
+        const monthAbbr = dayMonthMatch[2].toLowerCase();
+        if (monthAbbreviations[monthAbbr]) {
+            const month = monthAbbreviations[monthAbbr];
+            console.warn(`Excel date correction: "${trimmed}" → "${month}-${day}" (precinct)`);
+            return `${month}-${day}`;
+        }
+    }
+    
+    // Match "Mon-D" pattern (e.g., "Feb-4", "Mar-12")
+    const monthDayMatch = trimmed.match(/^([A-Za-z]{3})-(\d{1,2})$/);
+    if (monthDayMatch) {
+        const monthAbbr = monthDayMatch[1].toLowerCase();
+        const day = monthDayMatch[2];
+        if (monthAbbreviations[monthAbbr]) {
+            const month = monthAbbreviations[monthAbbr];
+            console.warn(`Excel date correction: "${trimmed}" → "${month}-${day}" (precinct)`);
+            return `${month}-${day}`;
+        }
+    }
+    
     // Preserve hyphens and numbers only, remove other non-alphanumeric chars
-    const cleaned = value.toString().trim().replace(/[^0-9-]/g, '');
+    const cleaned = trimmed.replace(/[^0-9-]/g, '');
     
     // Return as-is to preserve district-precinct format like "2-4"
     return cleaned;

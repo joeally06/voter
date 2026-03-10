@@ -489,4 +489,80 @@ router.get('/non-voters-by-precinct', async (req, res, next) => {
     }
 });
 
+/**
+ * GET /api/analytics/election-codes
+ * Returns all distinct election codes that have voting data.
+ * Used to populate the election selector dropdown.
+ *
+ * Example: GET /api/analytics/election-codes
+ */
+router.get('/election-codes', async (req, res, next) => {
+    try {
+        const analyticsService = new AnalyticsService();
+        const codes = await analyticsService.getElectionCodes();
+
+        res.json({
+            success: true,
+            timestamp: new Date().toISOString(),
+            data: codes
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * GET /api/analytics/last-election-breakdown
+ * Get breakdown of the most recent election: who voted, age distribution, precinct distribution
+ *
+ * Query parameters:
+ * - precinct: Filter by precinct number (2 digits, optional)
+ * - electionCode: Specific election code to analyze (optional, e.g. E_1, E_2)
+ *
+ * Returns:
+ * - Election summary (total voted, turnout rate, early vote stats)
+ * - Age group breakdown of voters
+ * - Precinct-level breakdown with party data
+ * - Summary highlights (highest/lowest turnout precincts, largest age group)
+ *
+ * Example: GET /api/analytics/last-election-breakdown
+ * Example: GET /api/analytics/last-election-breakdown?precinct=05
+ * Example: GET /api/analytics/last-election-breakdown?electionCode=E_2
+ */
+router.get('/last-election-breakdown', [
+    query('precinct')
+        .optional()
+        .isString()
+        .trim()
+        .matches(/^\d{2}$/)
+        .withMessage('Precinct must be 2 digits'),
+    query('electionCode')
+        .optional()
+        .isString()
+        .trim()
+        .matches(/^[A-Z0-9_]+$/)
+        .withMessage('Invalid election code format'),
+    validate
+], async (req, res, next) => {
+    try {
+        const analyticsService = new AnalyticsService();
+        const filters = {
+            precinct: req.query.precinct,
+            electionCode: req.query.electionCode
+        };
+        
+        const result = await analyticsService.getLastElectionBreakdown(filters);
+        
+        res.json({
+            success: true,
+            timestamp: new Date().toISOString(),
+            queryTime: result.queryTime,
+            filters: filters,
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
 module.exports = router;

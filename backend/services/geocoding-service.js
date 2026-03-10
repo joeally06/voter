@@ -71,6 +71,9 @@ class GeocodingService {
     }
 
     try {
+      // Check quota (daily + monthly) BEFORE making API call
+      await this.quotaManager.checkQuota('geocoding', 1);
+
       // Use rate limiter to schedule the API call
       const response = await this.limiter.schedule(() => 
         this.makeGeocodingRequest(address, components)

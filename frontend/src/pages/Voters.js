@@ -63,7 +63,7 @@ export async function renderVoters(container) {
 
   const reload = debounce(() => {
     state.filters.offset = 0;
-    state.filters.name = searchInput.value || undefined;
+    state.filters.name = searchInput.value.trim().length >= 2 ? searchInput.value.trim() : undefined;
     state.filters.precinct = precinctInput.value || undefined;
     state.filters.super_voter = superSelect.value || undefined;
     state.filters.party = partySelect.value || undefined;
@@ -93,14 +93,14 @@ export async function renderVoters(container) {
       modalBody.innerHTML = `
         <div class="space-y-3 text-sm">
           <div class="grid grid-cols-2 gap-3">
-            <div><span class="text-gray-500">Name</span><p class="font-medium">${escapeHtml(v.first_name)} ${escapeHtml(v.last_name)}</p></div>
-            <div><span class="text-gray-500">Voter ID</span><p class="font-medium">${escapeHtml(v.voter_id)}</p></div>
+            <div><span class="text-gray-500">Name</span><p class="font-medium">${escapeHtml(v.firstName)} ${escapeHtml(v.lastName)}</p></div>
+            <div><span class="text-gray-500">Voter ID</span><p class="font-medium">${escapeHtml(v.voterId)}</p></div>
             <div><span class="text-gray-500">Address</span><p class="font-medium">${escapeHtml(v.address)}</p></div>
             <div><span class="text-gray-500">City</span><p class="font-medium">${escapeHtml(v.city)}</p></div>
-            <div><span class="text-gray-500">ZIP</span><p class="font-medium">${escapeHtml(v.zip_code)}</p></div>
-            <div><span class="text-gray-500">Precinct</span><p class="font-medium">${escapeHtml(v.precinct_number)}</p></div>
-            <div><span class="text-gray-500">Super Voter</span><p class="font-medium">${v.super_voter ? '✅ Yes' : 'No'}</p></div>
-            ${v.date_of_birth ? `<div><span class="text-gray-500">DOB</span><p class="font-medium">${escapeHtml(v.date_of_birth)}</p></div>` : ''}
+            <div><span class="text-gray-500">ZIP</span><p class="font-medium">${escapeHtml(v.zipCode)}</p></div>
+            <div><span class="text-gray-500">Precinct</span><p class="font-medium">${escapeHtml(v.precinctNumber)}</p></div>
+            <div><span class="text-gray-500">Super Voter</span><p class="font-medium">${v.superVoter ? '✅ Yes' : 'No'}</p></div>
+            ${v.dateOfBirth ? `<div><span class="text-gray-500">DOB</span><p class="font-medium">${escapeHtml(v.dateOfBirth)}</p></div>` : ''}
             ${v.age ? `<div><span class="text-gray-500">Age</span><p class="font-medium">${v.age}</p></div>` : ''}
           </div>
         </div>
@@ -125,12 +125,12 @@ async function loadVoters(container) {
     state.total = res.total || 0;
 
     const columns = [
-      { label: 'Name',     key: 'last_name', render: r => `<span class="cursor-pointer text-primary-600 hover:underline font-medium" data-voter-id="${r.id}">${escapeHtml(r.last_name)}, ${escapeHtml(r.first_name)}</span>` },
+      { label: 'Name',     key: 'lastName', render: r => `<span class="cursor-pointer text-primary-600 hover:underline font-medium" data-voter-id="${r.id}">${escapeHtml(r.lastName)}, ${escapeHtml(r.firstName)}</span>` },
       { label: 'Address',  key: 'address', render: r => escapeHtml(r.address || '—') },
       { label: 'City',     key: 'city',    render: r => escapeHtml(r.city || '—') },
-      { label: 'ZIP',      key: 'zip_code' },
-      { label: 'Precinct', key: 'precinct_number' },
-      { label: 'Super',    key: 'super_voter', render: r => r.super_voter ? '<span class="text-green-600 font-bold">★</span>' : '—' },
+      { label: 'ZIP',      key: 'zipCode' },
+      { label: 'Precinct', key: 'precinctNumber' },
+      { label: 'Super',    key: 'superVoter', render: r => r.superVoter ? '<span class="text-green-600 font-bold">★</span>' : '—' },
     ];
 
     results.innerHTML = state.data.length > 0

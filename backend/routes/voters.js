@@ -42,7 +42,7 @@ const validate = (req, res, next) => {
  */
 router.get('/', [
     query('precinct').optional().isString().trim().withMessage('Precinct must be a valid string'),
-    query('name').optional().isString().trim().isLength({ min: 2, max: 100 }).withMessage('Name must be 2-100 characters'),
+    query('name').optional().isString().trim().isLength({ min: 1, max: 100 }).withMessage('Name must be 1-100 characters'),
     query('super_voter').optional().isBoolean().withMessage('super_voter must be true or false'),
     query('geocoded').optional().isBoolean().withMessage('geocoded must be true or false'),
     // NEW: Party filter validator - accepts R, D, or R,D

@@ -14,11 +14,19 @@ const database = require('../config/database');
 
 class QuotaManager {
   constructor() {
-    // Daily quota limits per API
+    // Daily quota limits per API (safety net per-day)
     this.quotaLimits = {
-      geocoding: parseInt(process.env.DAILY_QUOTA_LIMIT) || 1333,
-      distance_matrix: parseInt(process.env.DISTANCE_MATRIX_DAILY_QUOTA) || 333,
-      directions: parseInt(process.env.DIRECTIONS_DAILY_QUOTA) || 100
+      geocoding: parseInt(process.env.DAILY_GEOCODING_QUOTA || process.env.DAILY_QUOTA_LIMIT) || 333,
+      distance_matrix: parseInt(process.env.DAILY_DISTANCE_MATRIX_QUOTA || process.env.DISTANCE_MATRIX_DAILY_QUOTA) || 333,
+      directions: parseInt(process.env.DAILY_DIRECTIONS_QUOTA || process.env.DIRECTIONS_DAILY_QUOTA) || 100
+    };
+
+    // Monthly limits per API (hard cap for free tier — 10,000/month)
+    this.monthlyLimits = {
+      geocoding: parseInt(process.env.MONTHLY_GEOCODING_LIMIT) || 10000,
+      distance_matrix: parseInt(process.env.MONTHLY_DISTANCE_MATRIX_LIMIT) || 10000,
+      dynamic_maps: parseInt(process.env.MONTHLY_DYNAMIC_MAPS_LIMIT) || 10000,
+      directions: parseInt(process.env.MONTHLY_DIRECTIONS_LIMIT) || 10000
     };
     
     // Warning thresholds
@@ -76,6 +84,9 @@ class QuotaManager {
    * @throws {Error} If quota is exhausted
    */
   async checkQuota(apiName, callCount = 1) {
+    // Check monthly limit FIRST (higher priority)
+    await this.checkMonthlyQuota(apiName, callCount);
+
     const usage = await this.getOrCreateUsageRecord(apiName);
     const quota = this.quotaLimits[apiName] || 1000;
     
@@ -249,6 +260,115 @@ class QuotaManager {
   }
 
   /**
+   * Check if monthly quota allows new API calls
+   * 
+   * @param {string} apiName - API name
+   * @param {number} callCount - Number of calls to make (default: 1)
+   * @returns {Promise<Object>} Monthly quota status
+   * @throws {Error} If monthly quota is exhausted
+   */
+  async checkMonthlyQuota(apiName, callCount = 1) {
+    const monthlyLimit = this.monthlyLimits[apiName];
+    if (!monthlyLimit) return { allowed: true }; // No monthly limit configured
+
+    const monthlyUsage = await this.getMonthlyUsage(apiName);
+    const projectedUsage = monthlyUsage + callCount;
+
+    if (projectedUsage > monthlyLimit) {
+      // Calculate reset date (1st of next month)
+      const now = new Date();
+      const resetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const resetDateStr = resetDate.toISOString().split('T')[0];
+
+      const error = new Error(
+        `Monthly ${apiName} quota exceeded. ` +
+        `Usage: ${monthlyUsage.toLocaleString()}/${monthlyLimit.toLocaleString()} this month. ` +
+        `Requested: +${callCount.toLocaleString()} calls. ` +
+        `Quota resets on ${resetDateStr}.`
+      );
+      error.quotaError = true;
+      error.isMonthlyExhausted = true;
+      error.monthlyUsage = monthlyUsage;
+      error.monthlyLimit = monthlyLimit;
+      error.remaining = Math.max(0, monthlyLimit - monthlyUsage);
+      error.resetDate = resetDateStr;
+      throw error;
+    }
+
+    // Warn at thresholds
+    const currentPercent = (monthlyUsage / monthlyLimit) * 100;
+    for (const threshold of this.warningThresholds) {
+      if (currentPercent >= threshold && currentPercent < threshold + 5) {
+        console.warn(
+          `⚠️  MONTHLY ${apiName} quota at ${currentPercent.toFixed(1)}% ` +
+          `(${monthlyUsage.toLocaleString()}/${monthlyLimit.toLocaleString()})`
+        );
+        break;
+      }
+    }
+
+    return {
+      allowed: true,
+      monthlyLimit,
+      monthlyUsed: monthlyUsage,
+      monthlyRemaining: monthlyLimit - monthlyUsage,
+      monthlyPercentUsed: parseFloat(currentPercent.toFixed(1))
+    };
+  }
+
+  /**
+   * Get total API calls for the current month
+   * 
+   * @param {string} apiName - API name
+   * @returns {Promise<number>} Total calls this month
+   */
+  async getMonthlyUsage(apiName) {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const startDate = startOfMonth.toISOString().split('T')[0];
+
+    const result = await database.get(`
+      SELECT COALESCE(SUM(call_count), 0) as total
+      FROM api_usage
+      WHERE api_name = ? AND call_date >= ?
+    `, [apiName, startDate]);
+
+    return result?.total || 0;
+  }
+
+  /**
+   * Get monthly quota status for one or all APIs
+   * 
+   * @param {string|null} apiName - API name (null for all)
+   * @returns {Promise<Object>} Monthly quota status
+   */
+  async getMonthlyQuotaStatus(apiName = null) {
+    const results = {};
+    const apis = apiName ? [apiName] : Object.keys(this.monthlyLimits);
+
+    // Calculate reset date (1st of next month)
+    const now = new Date();
+    const resetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const resetDateStr = resetDate.toISOString().split('T')[0];
+
+    for (const api of apis) {
+      const usage = await this.getMonthlyUsage(api);
+      const limit = this.monthlyLimits[api] || 10000;
+      results[api] = {
+        limit,
+        used: usage,
+        remaining: Math.max(0, limit - usage),
+        percentUsed: parseFloat(((usage / limit) * 100).toFixed(1)),
+        isExhausted: usage >= limit,
+        resetDate: resetDateStr
+      };
+    }
+
+    return apiName ? results[apiName] : results;
+  }
+
+  /**
    * Get current quota status for an API
    * 
    * @param {string} apiName - API name
@@ -263,6 +383,9 @@ class QuotaManager {
       const cacheHitRate = (usage.cache_hits + usage.cache_misses) > 0
         ? (usage.cache_hits / (usage.cache_hits + usage.cache_misses)) * 100
         : 0;
+
+      // Include monthly data
+      const monthlyStatus = await this.getMonthlyQuotaStatus(apiName);
       
       return {
         quota,
@@ -271,7 +394,8 @@ class QuotaManager {
         percentUsed: parseFloat(percentUsed.toFixed(1)),
         cacheHitRate: parseFloat(cacheHitRate.toFixed(1)),
         cacheHits: usage.cache_hits || 0,
-        cacheMisses: usage.cache_misses || 0
+        cacheMisses: usage.cache_misses || 0,
+        monthly: monthlyStatus
       };
       
     } catch (error) {
