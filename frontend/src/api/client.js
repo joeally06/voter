@@ -156,3 +156,30 @@ export const saveRoute        = (body) => post('/routes/save', body);
 export const fetchRoute       = (id)   => get(`/routes/${id}`);
 export const deleteRoute      = (id)   => del(`/routes/${id}`);
 export const cleanExpiredRoutes = ()   => post('/routes/cleanup-expired');
+
+// ── Archive / Election Cycles ─────────────────────────────────────
+
+/** Fetch current (unarchived) record counts for the rollover confirmation modal */
+export const fetchCurrentStatus = () => get('/archive/current-status');
+
+export const fetchCycles   = (params = {}) => get('/archive/cycles', params);
+export const createCycle   = (data)         => post('/archive/cycles', data);
+export const fetchCycle    = (id)           => get(`/archive/cycles/${id}`);
+export const rolloverCycle = (id)           => post(`/archive/cycles/${id}/rollover`, {});
+
+/**
+ * Soft-delete a cycle. Requires the user to pass the cycle name as confirmText.
+ * Uses DELETE with a JSON body (not supported by the simple `del` helper).
+ */
+export const deleteCycle = (id, confirmText) =>
+    request('DELETE', `/archive/cycles/${id}`, { body: { confirm: confirmText } });
+
+/** Opens the cycle's JSON export in a new tab / triggers download */
+export const downloadCycleExport = (id) =>
+    window.open(`/api/archive/cycles/${id}/export`, '_blank');
+
+// ── Mailer Export ─────────────────────────────────────────────────
+
+export const fetchMailerCount  = (filters = {}) => get('/mailer/count', filters);
+export const exportMailerCsv   = (filters = {}) => get('/mailer/export', { ...filters, format: 'csv' });
+export const fetchMailerVoters = (filters = {}) => get('/mailer/voters', filters);

@@ -11,6 +11,7 @@
  */
 
 const database = require('../config/database');
+const log = require('../utils/logger');
 
 class QuotaManager {
   constructor() {
@@ -153,8 +154,8 @@ class QuotaManager {
     // Warn at thresholds
     for (const threshold of this.warningThresholds) {
       if (percentUsed >= threshold && percentUsed < threshold + 5) {
-        console.warn(
-          `⚠️  ${apiName} quota at ${percentUsed.toFixed(1)}% ` +
+        log.warn(
+          `${apiName} quota at ${percentUsed.toFixed(1)}% ` +
           `(${currentUsage + callCount}/${quota})`
         );
         break;
@@ -198,7 +199,7 @@ class QuotaManager {
       return true;
       
     } catch (error) {
-      console.error('API call increment error:', error.message);
+      log.error('API call increment error:', error.message);
       return false;
     }
   }
@@ -226,7 +227,7 @@ class QuotaManager {
       return true;
       
     } catch (error) {
-      console.error('Cache hit increment error:', error.message);
+      log.error('Cache hit increment error:', error.message);
       return false;
     }
   }
@@ -254,7 +255,7 @@ class QuotaManager {
       return true;
       
     } catch (error) {
-      console.error('Cache miss increment error:', error.message);
+      log.error('Cache miss increment error:', error.message);
       return false;
     }
   }
@@ -299,8 +300,8 @@ class QuotaManager {
     const currentPercent = (monthlyUsage / monthlyLimit) * 100;
     for (const threshold of this.warningThresholds) {
       if (currentPercent >= threshold && currentPercent < threshold + 5) {
-        console.warn(
-          `⚠️  MONTHLY ${apiName} quota at ${currentPercent.toFixed(1)}% ` +
+        log.warn(
+          `MONTHLY ${apiName} quota at ${currentPercent.toFixed(1)}% ` +
           `(${monthlyUsage.toLocaleString()}/${monthlyLimit.toLocaleString()})`
         );
         break;
@@ -399,7 +400,7 @@ class QuotaManager {
       };
       
     } catch (error) {
-      console.error('Quota status error:', error.message);
+      log.error('Quota status error:', error.message);
       return null;
     }
   }
@@ -441,7 +442,7 @@ class QuotaManager {
       };
       
     } catch (error) {
-      console.error('All quota status error:', error.message);
+      log.error('All quota status error:', error.message);
       return null;
     }
   }
@@ -499,7 +500,7 @@ class QuotaManager {
       return apiName ? summary[0] || null : summary;
       
     } catch (error) {
-      console.error('Monthly summary error:', error.message);
+      log.error('Monthly summary error:', error.message);
       return null;
     }
   }

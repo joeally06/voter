@@ -7,6 +7,13 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'flyer-vendor': ['fabric', 'pdfmake/build/pdfmake', 'pdfmake/build/vfs_fonts'],
+        },
+      },
+    },
   },
   server: {
     port: 5173,

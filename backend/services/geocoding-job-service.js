@@ -15,6 +15,7 @@ const database = require('../config/database');
 const GeocodingService = require('./geocoding-service');
 const AddressCacheService = require('./address-cache-service');
 const QuotaManager = require('./quota-manager');
+const log = require('../utils/logger');
 
 class GeocodingJobService {
   constructor() {
@@ -109,7 +110,7 @@ class GeocodingJobService {
    * @returns {Promise<Object>} Job completion statistics
    */
   async processJob(jobId) {
-    console.log(`Starting geocoding job ${jobId}...`);
+    log.info(`Starting geocoding job ${jobId}...`);
     
     try {
       // Update status to PROCESSING
@@ -290,12 +291,12 @@ class GeocodingJobService {
                 voter.id
               ]);
               successCount++;
-              console.log(`✅ Successfully geocoded voter ${voter.id}`);
+              log.info(`Successfully geocoded voter ${voter.id}`);
             } else {
               // Log error
               await this.logGeocodingError(jobId, voter, geocodeResult);
               failedCount++;
-              console.log(`❌ Failed to geocode voter ${voter.id}: ${geocodeResult.error}`);
+              log.info(`Failed to geocode voter ${voter.id}: ${geocodeResult.error}`);
             }
             
           } catch (error) {
@@ -350,7 +351,7 @@ class GeocodingJobService {
         WHERE id = ?
       `, [processedCount, successCount, failedCount, cacheHits, apiCalls, jobId]);
       
-      console.log(`✅ Job ${jobId} completed: ${successCount} successful, ${failedCount} failed`);
+      log.info(`Job ${jobId} completed: ${successCount} successful, ${failedCount} failed`);
       
       return {
         success: true,

@@ -1,6 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+const log = require('../utils/logger');
 
 /**
  * Database configuration and connection management
@@ -75,7 +76,7 @@ class Database {
                     console.error('Database connection failed:', err.message);
                     reject(err);
                 } else {
-                    console.log('✅ Connected to SQLite database');
+                    log.info('Connected to SQLite database');
                     this.isConnected = true;
                     
                     // Enable foreign keys
@@ -98,7 +99,14 @@ class Database {
                             return;
                         }
                         
-                        console.log(`✅ Database schema validated (${existingTables.length} tables)`);
+                        log.info(`Database schema validated (${existingTables.length} tables)`);
+
+                        // Apply pending migrations (idempotent — safe to run on every startup)
+                        try {
+                            await require('../migrations/010_add_election_cycles').up(this);
+                        } catch (migrationErr) {
+                            console.warn('⚠️  Migration 010 warning:', migrationErr.message);
+                        }
                     } catch (validationError) {
                         console.error('❌ Schema validation failed:', validationError);
                         reject(validationError);
@@ -354,7 +362,7 @@ const database = new Database();
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-    console.log('\n⏹️  Shutting down database connection...');
+    log.info('Shutting down database connection...');
     await database.close();
     process.exit(0);
 });

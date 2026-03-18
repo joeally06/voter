@@ -121,8 +121,23 @@ voter-platform/
 3. Enable these APIs:
    - Maps JavaScript API
    - Geocoding API
-   - (Optional) Distance Matrix API
+   - **Routes API** (Recommended - replaces legacy Distance Matrix API)
+   - ~~Distance Matrix API~~ (Legacy - being phased out)
 4. Create API key and add to `.env` file
+
+**Migration to Routes API:**
+- The platform now supports Google's modern Routes API for route calculations
+- Routes API offers better performance, enhanced features, and future-proof architecture
+- Feature flag (`USE_ROUTES_API`) allows safe migration and easy rollback
+- See [Routes API Migration Guide](docs/ROUTES_API_MIGRATION.md) for detailed instructions
+
+**Quick Setup:**
+```bash
+# .env configuration
+GOOGLE_MAPS_API_KEY=your_api_key_here
+USE_ROUTES_API=true   # Enable Routes API (recommended)
+DISTANCE_MATRIX_RATE_LIMIT=50  # Adjust rate limit for Routes API
+```
 
 ### Database Schema
 The application uses SQLite for local data storage:

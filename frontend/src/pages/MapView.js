@@ -340,7 +340,7 @@ function renderRouteTabHTML() {
         <!-- Start Location -->
         <div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <h3 class="font-semibold text-gray-900 dark:text-white text-sm mb-3">Start Location</h3>
-          <input id="rp-start-address" type="text" placeholder="Enter start address..."
+          <input id="rp-start-address" type="text" placeholder="Enter start address..." maxlength="200"
             class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none mb-2">
           <div class="flex gap-2">
             <button id="rp-use-location" class="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-3 py-2 rounded-lg text-xs font-medium transition hover:bg-gray-300 dark:hover:bg-gray-600">
@@ -426,7 +426,7 @@ function renderRouteTabHTML() {
         <div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <h3 class="font-semibold text-gray-900 dark:text-white text-sm mb-3">Load Saved Route</h3>
           <div class="flex gap-2">
-            <input id="rp-load-id" type="text" placeholder="Route ID..."
+            <input id="rp-load-id" type="text" placeholder="Route ID..." maxlength="50"
               class="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none">
             <button id="rp-load-route" class="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Load</button>
           </div>
@@ -440,7 +440,7 @@ function renderRouteTabHTML() {
         <div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
             <h3 class="font-semibold text-gray-900 dark:text-white text-sm">Geocoded Voters</h3>
-            <input id="rp-search" type="text" placeholder="Search voters..."
+            <input id="rp-search" type="text" placeholder="Search voters..." maxlength="100"
               class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-1.5 text-xs focus:ring-2 focus:ring-primary-500 outline-none w-40">
           </div>
           <div class="flex flex-wrap items-center gap-2 mb-3">

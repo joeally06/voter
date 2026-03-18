@@ -12,6 +12,7 @@
 
 const crypto = require('crypto');
 const database = require('../config/database');
+const log = require('../utils/logger');
 
 class RouteCacheService {
   constructor() {
@@ -109,7 +110,7 @@ class RouteCacheService {
       };
       
     } catch (error) {
-      console.error('Route cache lookup error:', error.message);
+      log.error('Route cache lookup error:', error.message);
       return null; // Fail gracefully
     }
   }
@@ -160,7 +161,7 @@ class RouteCacheService {
       return true;
       
     } catch (error) {
-      console.error('Route cache storage error:', error.message);
+      log.error('Route cache storage error:', error.message);
       return false;
     }
   }
@@ -178,7 +179,7 @@ class RouteCacheService {
       `, [hash]);
       return true;
     } catch (error) {
-      console.error('Cache invalidation error:', error.message);
+      log.error('Cache invalidation error:', error.message);
       return false;
     }
   }
@@ -197,13 +198,13 @@ class RouteCacheService {
       const deletedCount = result.changes || 0;
       
       if (deletedCount > 0) {
-        console.log(`🧹 Cleaned up ${deletedCount} expired route cache entries`);
+        log.info(`Cleaned up ${deletedCount} expired route cache entries`);
       }
       
       return deletedCount;
       
     } catch (error) {
-      console.error('Cache cleanup error:', error.message);
+      log.error('Cache cleanup error:', error.message);
       return 0;
     }
   }
@@ -253,7 +254,7 @@ class RouteCacheService {
       };
       
     } catch (error) {
-      console.error('Cache stats error:', error.message);
+      log.error('Cache stats error:', error.message);
       return null;
     }
   }

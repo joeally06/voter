@@ -279,6 +279,7 @@ class VoterModel {
                         SELECT DISTINCT voter_id 
                         FROM election_history 
                         WHERE party_code = ?
+                          AND cycle_id IS NULL
                     )
                 `);
                 params.push(parties[0]);
@@ -290,6 +291,7 @@ class VoterModel {
                         SELECT DISTINCT voter_id 
                         FROM election_history 
                         WHERE party_code IN (${placeholders})
+                          AND cycle_id IS NULL
                     )
                 `);
                 params.push(...parties);
@@ -300,20 +302,22 @@ class VoterModel {
         // Regular = voters who have voted at least once
         // Never = voters with no election history records
         if (filters.voting_status === 'regular') {
-            // Voters who have voted at least once
+            // Voters who have voted at least once in current cycle
             conditions.push(`
                 v.voter_id IN (
                     SELECT DISTINCT voter_id 
                     FROM election_history 
                     WHERE voted = 1
+                      AND cycle_id IS NULL
                 )
             `);
         } else if (filters.voting_status === 'never') {
-            // Voters with NO election history (never voted)
+            // Voters with no election history in current cycle (never voted)
             conditions.push(`
                 v.voter_id NOT IN (
                     SELECT DISTINCT voter_id 
                     FROM election_history
+                    WHERE cycle_id IS NULL
                 )
             `);
         }
@@ -354,6 +358,7 @@ class VoterModel {
                     FROM election_history 
                     WHERE election_history.voter_id = v.voter_id 
                       AND party_code IS NOT NULL
+                      AND cycle_id IS NULL
                     /* Sort chronologically: year DESC, then General > Runoff > Primary */
                     ORDER BY SUBSTR(election_code, 1, 4) DESC,
                       CASE SUBSTR(election_code, -1)
@@ -369,11 +374,13 @@ class VoterModel {
                     FROM election_history 
                     WHERE election_history.voter_id = v.voter_id 
                       AND voted = 1
+                      AND cycle_id IS NULL
                 ) as electionsVoted,
                 (
                     SELECT COUNT(*)
                     FROM election_history
                     WHERE election_history.voter_id = v.voter_id
+                      AND cycle_id IS NULL
                 ) as totalElections
             FROM voters v
             ${whereClause}
@@ -508,7 +515,8 @@ class VoterModel {
         const history = await database.all(
             `SELECT election_code, voted 
              FROM election_history 
-             WHERE voter_id = ? 
+             WHERE voter_id = ?
+               AND cycle_id IS NULL
              /* Sort chronologically: year DESC, then General > Runoff > Primary */
              ORDER BY SUBSTR(election_code, 1, 4) DESC,
                CASE SUBSTR(election_code, -1)
@@ -587,9 +595,9 @@ class VoterModel {
     async recalculateAllSuperVoters() {
         // ENHANCED: Dynamic threshold based on available election data
         
-        // Step 1: Count total elections in database
+        // Step 1: Count total elections in current (unarchived) cycle
         const electionCount = await database.get(
-            `SELECT COUNT(DISTINCT election_code) as total FROM election_history`
+            `SELECT COUNT(DISTINCT election_code) as total FROM election_history WHERE cycle_id IS NULL`
         );
         
         const totalElections = electionCount.total;
@@ -626,6 +634,7 @@ class VoterModel {
                     SELECT voted 
                     FROM election_history 
                     WHERE election_history.voter_id = voters.voter_id 
+                      AND cycle_id IS NULL
                     /* Sort chronologically: year DESC, then General > Runoff > Primary */
                     ORDER BY SUBSTR(election_code, 1, 4) DESC,
                       CASE SUBSTR(election_code, -1)
@@ -640,6 +649,7 @@ class VoterModel {
             WHERE EXISTS (
                 SELECT 1 FROM election_history 
                 WHERE election_history.voter_id = voters.voter_id
+                  AND cycle_id IS NULL
             )
         `, [threshold, lookback]);
         

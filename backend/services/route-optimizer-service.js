@@ -16,6 +16,7 @@
 
 const DistanceMatrixService = require('./distance-matrix-service');
 const { SparseDistanceMatrix } = require('./distance-matrix-service');
+const log = require('../utils/logger');
 
 class RouteOptimizerService {
   constructor() {
@@ -42,7 +43,7 @@ class RouteOptimizerService {
       ...locations
     ];
 
-    console.log(`🎯 Optimizing route for ${locations.length} voters using ${algorithm} algorithm`);
+    log.info(`Optimizing route for ${locations.length} voters using ${algorithm} algorithm`);
     const optimizationStart = Date.now();
 
     // Step 1: Build distance matrix (progressive or full based on env var)
@@ -78,8 +79,8 @@ class RouteOptimizerService {
       const maxPossible = allLocations.length * allLocations.length;
       const reduction = ((1 - (stats.apiCalls / maxPossible)) * 100).toFixed(1);
       
-      console.log(`✅ Progressive routing: ${stats.apiCalls} API calls (${reduction}% reduction from ${maxPossible})`);
-      console.log(`   Cache hits: ${stats.cacheHits}, Lazy loads: ${stats.lazyLoads}, Prefetch batches: ${stats.prefetchBatches}`);
+      log.info(`Progressive routing: ${stats.apiCalls} API calls (${reduction}% reduction from ${maxPossible})`);
+      log.info(`Cache hits: ${stats.cacheHits}, Lazy loads: ${stats.lazyLoads}, Prefetch batches: ${stats.prefetchBatches}`);
       
       metrics.apiCallReduction = `${reduction}%`;
     }
@@ -91,7 +92,7 @@ class RouteOptimizerService {
       return idx === 0 ? null : locations[idx - 1];
     }).filter(loc => loc !== null);
 
-    console.log(`✅ Route optimization complete in ${optimizationTime}ms`);
+    log.info(`Route optimization complete in ${optimizationTime}ms`);
 
     return {
       locations: orderedLocations,

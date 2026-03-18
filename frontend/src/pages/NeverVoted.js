@@ -18,13 +18,13 @@ export async function renderNeverVoted(container) {
     <!-- Filters -->
     <div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-6">
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-        <input id="nv-search" type="text" placeholder="Search by name..."
+        <input id="nv-search" type="text" placeholder="Search by name..." maxlength="100"
           class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none" />
 
-        <input id="nv-precinct" type="text" placeholder="Precinct(s) e.g. 01,02"
+        <input id="nv-precinct" type="text" placeholder="Precinct(s) e.g. 01,02" maxlength="50"
           class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none" />
 
-        <input id="nv-city" type="text" placeholder="City"
+        <input id="nv-city" type="text" placeholder="City" maxlength="50"
           class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none" />
 
         <div class="flex gap-2">

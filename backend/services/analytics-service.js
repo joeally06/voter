@@ -105,13 +105,14 @@ class AnalyticsService {
           ORDER BY p.precinct_number
         `),
         
-        // Recent activity
+      // Recent activity (scope to current cycle only)
         this.db.get(`
           SELECT 
             end_time as lastImport,
             records_successful as recordsImported
           FROM import_logs
           WHERE status = 'completed'
+            AND cycle_id IS NULL
           ORDER BY end_time DESC
           LIMIT 1
         `)
@@ -176,7 +177,7 @@ class AnalyticsService {
 
     try {
       // Build WHERE clauses based on filters
-      let whereClause = 'WHERE e.voted = 1';
+      let whereClause = 'WHERE e.voted = 1 AND e.cycle_id IS NULL';
       const params = [];
       
       if (filters.precinct) {
@@ -255,7 +256,7 @@ class AnalyticsService {
             CAST(COUNT(DISTINCT e.id) AS REAL) / 
               NULLIF(COUNT(DISTINCT v.id) * COUNT(DISTINCT e.election_code), 0) * 100 as averageTurnout
           FROM voters v
-          LEFT JOIN election_history e ON v.voter_id = e.voter_id AND e.voted = 1
+          LEFT JOIN election_history e ON v.voter_id = e.voter_id AND e.voted = 1 AND e.cycle_id IS NULL
           ${filters.precinct ? 'WHERE v.precinct_number = ?' : ''}
           GROUP BY v.precinct_number
           ORDER BY v.precinct_number
@@ -358,6 +359,9 @@ class AnalyticsService {
         whereClause += (whereClause ? ' AND ' : 'WHERE ') + 'v.precinct_number = ?';
         params.push(filters.precinct);
       }
+
+      // Always scope to current (unarchived) cycle in live data paths
+      whereClause += (whereClause ? ' AND ' : 'WHERE ') + 'e.cycle_id IS NULL';
 
       // Overall turnout
       const overall = await this.db.get(`
@@ -500,7 +504,7 @@ class AnalyticsService {
             v.id,
             COUNT(DISTINCT e.election_code) as election_count
           FROM voters v
-          LEFT JOIN election_history e ON v.voter_id = e.voter_id AND e.voted = 1
+          LEFT JOIN election_history e ON v.voter_id = e.voter_id AND e.voted = 1 AND e.cycle_id IS NULL
           WHERE v.super_voter = 1
           ${filters.precinct ? 'AND v.precinct_number = ?' : ''}
           GROUP BY v.id
@@ -536,6 +540,7 @@ class AnalyticsService {
               FROM election_history e 
               WHERE e.voter_id = v.voter_id 
                 AND e.party_code IS NOT NULL 
+                AND e.cycle_id IS NULL
               ORDER BY e.election_code DESC 
               LIMIT 1
             ) as latest_party
@@ -557,7 +562,7 @@ class AnalyticsService {
             CAST(SUM(CASE WHEN e.early_voted = 1 THEN 1 ELSE 0 END) AS REAL) / 
               NULLIF(COUNT(e.id), 0) as early_pref
           FROM voters v
-          JOIN election_history e ON v.voter_id = e.voter_id AND e.voted = 1
+          JOIN election_history e ON v.voter_id = e.voter_id AND e.voted = 1 AND e.cycle_id IS NULL
           WHERE v.super_voter = 1
           ${filters.precinct ? 'AND v.precinct_number = ?' : ''}
           GROUP BY v.id
@@ -641,6 +646,7 @@ class AnalyticsService {
               FROM election_history e 
               WHERE e.voter_id = v.voter_id 
                 AND e.party_code IS NOT NULL 
+                AND e.cycle_id IS NULL
               ORDER BY e.election_code DESC 
               LIMIT 1
             ) as latest_party
@@ -668,6 +674,7 @@ class AnalyticsService {
               FROM election_history e 
               WHERE e.voter_id = v.voter_id 
                 AND e.party_code IS NOT NULL 
+                AND e.cycle_id IS NULL
               ORDER BY e.election_code DESC 
               LIMIT 1
             ) as latest_party
@@ -935,12 +942,12 @@ class AnalyticsService {
         SELECT 
           SUM(CASE 
             WHEN (SELECT COUNT(*) FROM election_history 
-                  WHERE voter_id = voters.voter_id AND voted = 1) = 0 
+                  WHERE voter_id = voters.voter_id AND voted = 1 AND cycle_id IS NULL) = 0 
             THEN 1 ELSE 0 
           END) as neverVoted,
           SUM(CASE 
             WHEN (SELECT COUNT(*) FROM election_history 
-                  WHERE voter_id = voters.voter_id AND voted = 1) BETWEEN 1 AND 3 
+                  WHERE voter_id = voters.voter_id AND voted = 1 AND cycle_id IS NULL) BETWEEN 1 AND 3 
             THEN 1 ELSE 0 
           END) as occasionalVoters,
           SUM(CASE WHEN super_voter = 1 THEN 1 ELSE 0 END) as superVoters,
@@ -1013,18 +1020,18 @@ class AnalyticsService {
           COUNT(*) as totalInAgeGroup,
           SUM(CASE 
             WHEN (SELECT COUNT(*) FROM election_history 
-                  WHERE voter_id = voters.voter_id AND voted = 1) = 0 
+                  WHERE voter_id = voters.voter_id AND voted = 1 AND cycle_id IS NULL) = 0 
             THEN 1 ELSE 0 
           END) as neverVotedCount,
           SUM(CASE 
             WHEN (SELECT COUNT(*) FROM election_history 
-                  WHERE voter_id = voters.voter_id AND voted = 1) BETWEEN 1 AND 3 
+                  WHERE voter_id = voters.voter_id AND voted = 1 AND cycle_id IS NULL) BETWEEN 1 AND 3 
             THEN 1 ELSE 0 
           END) as occasionalVoters,
           SUM(CASE WHEN super_voter = 1 THEN 1 ELSE 0 END) as superVoters,
           CAST(SUM(CASE 
             WHEN (SELECT COUNT(*) FROM election_history 
-                  WHERE voter_id = voters.voter_id AND voted = 1) = 0 
+                  WHERE voter_id = voters.voter_id AND voted = 1 AND cycle_id IS NULL) = 0 
             THEN 1 ELSE 0 
           END) AS REAL) / NULLIF(COUNT(*), 0) * 100 as neverVotedPercentage
         FROM voters
@@ -1100,28 +1107,28 @@ class AnalyticsService {
           COUNT(v.id) as totalVoters,
           SUM(CASE 
             WHEN (SELECT COUNT(*) FROM election_history 
-                  WHERE voter_id = v.voter_id AND voted = 1) = 0 
+                  WHERE voter_id = v.voter_id AND voted = 1 AND cycle_id IS NULL) = 0 
             THEN 1 ELSE 0 
           END) as neverVotedCount,
           CAST(SUM(CASE 
             WHEN (SELECT COUNT(*) FROM election_history 
-                  WHERE voter_id = v.voter_id AND voted = 1) = 0 
+                  WHERE voter_id = v.voter_id AND voted = 1 AND cycle_id IS NULL) = 0 
             THEN 1 ELSE 0 
           END) AS REAL) / NULLIF(COUNT(v.id), 0) * 100 as neverVotedPercentage,
           CASE 
             WHEN CAST(SUM(CASE 
               WHEN (SELECT COUNT(*) FROM election_history 
-                    WHERE voter_id = v.voter_id AND voted = 1) = 0 
+                    WHERE voter_id = v.voter_id AND voted = 1 AND cycle_id IS NULL) = 0 
               THEN 1 ELSE 0 
             END) AS REAL) / NULLIF(COUNT(v.id), 0) * 100 >= 80 THEN 'critical'
             WHEN CAST(SUM(CASE 
               WHEN (SELECT COUNT(*) FROM election_history 
-                    WHERE voter_id = v.voter_id AND voted = 1) = 0 
+                    WHERE voter_id = v.voter_id AND voted = 1 AND cycle_id IS NULL) = 0 
               THEN 1 ELSE 0 
             END) AS REAL) / NULLIF(COUNT(v.id), 0) * 100 >= 60 THEN 'high'
             WHEN CAST(SUM(CASE 
               WHEN (SELECT COUNT(*) FROM election_history 
-                    WHERE voter_id = v.voter_id AND voted = 1) = 0 
+                    WHERE voter_id = v.voter_id AND voted = 1 AND cycle_id IS NULL) = 0 
               THEN 1 ELSE 0 
             END) AS REAL) / NULLIF(COUNT(v.id), 0) * 100 >= 40 THEN 'medium'
             ELSE 'low'
@@ -1175,6 +1182,7 @@ class AnalyticsService {
       SELECT election_code
       FROM election_history
       WHERE voted = 1
+        AND cycle_id IS NULL
       GROUP BY election_code
       ORDER BY
         CASE
@@ -1218,6 +1226,7 @@ class AnalyticsService {
           SELECT election_code 
           FROM election_history 
           WHERE voted = 1
+            AND cycle_id IS NULL
           GROUP BY election_code 
           ORDER BY 
             CASE 

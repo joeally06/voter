@@ -319,6 +319,8 @@ app.use('/api/geocode', require('./routes/geocode'));
 app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/upload', require('./routes/upload'));
 app.use('/api/routes', require('./routes/routes')); // Phase 5: Route Planning
+app.use('/api/archive', require('./routes/archive')); // Phase 6: Election Cycle Archive
+app.use('/api/mailer', require('./routes/mailer')); // Mailer Export
 
 // ============================================================================
 // FRONTEND ROUTING

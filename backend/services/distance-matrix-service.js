@@ -1,20 +1,26 @@
 /**
  * Distance Matrix Service
- * Google Maps Distance Matrix API wrapper with caching
+ * Google Maps Routes API (Compute Route Matrix) wrapper with caching
  * 
  * Features:
- * - Google Distance Matrix API integration
+ * - Google Routes API integration (with legacy Distance Matrix fallback)
+ * - Feature flag for safe migration (USE_ROUTES_API)
  * - Intelligent caching via route-cache-service
- * - Batch processing (up to 25x25 matrix)
+ * - Batch processing (up to 625 elements)
  * - Rate limiting with Bottleneck
  * - Quota management integration
  * - Error handling for all API response codes
+ * - Transformation layer for API compatibility
+ * 
+ * Migration Status: Routes API with backward compatibility
  */
 
 const { Client } = require('@googlemaps/google-maps-services-js');
+const axios = require('axios');
 const Bottleneck = require('bottleneck');
 const RouteCacheService = require('./route-cache-service');
 const QuotaManager = require('./quota-manager');
+const log = require('../utils/logger');
 const database = require('../config/database');
 const apiKeys = require('../config/api-keys');
 
@@ -165,16 +171,33 @@ class SparseDistanceMatrix {
 
 class DistanceMatrixService {
   constructor() {
-    // Initialize Google Maps Client
-    this.client = new Client({});
-    this.apiKey = apiKeys.distanceMatrixApiKey;
+    // Feature flag: Use Routes API or legacy Distance Matrix API
+    this.useRoutesApi = process.env.USE_ROUTES_API === 'true';
+    
+    // Initialize API key and client based on feature flag
+    if (this.useRoutesApi) {
+      log.info('🚀 Using Google Routes API (Compute Route Matrix)');
+      this.apiKey = apiKeys.routesApiKey || apiKeys.distanceMatrixApiKey;
+      this.routesApiEndpoint = process.env.ROUTES_API_ENDPOINT || 
+        'https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix';
+      this.routesApiFieldMask = process.env.ROUTES_API_FIELD_MASK || 
+        'originIndex,destinationIndex,duration,distanceMeters,status,condition';
+      this.routingPreference = process.env.ROUTES_API_ROUTING_PREFERENCE || 'TRAFFIC_UNAWARE';
+      this.routesApiTimeout = parseInt(process.env.ROUTES_API_TIMEOUT_MS) || 10000;
+    } else {
+      log.info('⚠️  Using legacy Distance Matrix API (consider migrating to Routes API)');
+      this.client = new Client({});
+      this.apiKey = apiKeys.distanceMatrixApiKey;
+    }
     
     // Initialize services
     this.cacheService = new RouteCacheService();
     this.quotaManager = new QuotaManager();
     
     // Rate limiting configuration
-    const rateLimit = parseInt(process.env.DISTANCE_MATRIX_RATE_LIMIT) || 10;
+    // Routes API supports higher rate limits (3,000 EPM = 50 EPS default)
+    const defaultRateLimit = this.useRoutesApi ? 50 : 10;
+    const rateLimit = parseInt(process.env.DISTANCE_MATRIX_RATE_LIMIT) || defaultRateLimit;
     const delayMs = parseInt(process.env.DISTANCE_MATRIX_DELAY_MS) || 100;
     
     // Create rate limiter using Bottleneck
@@ -188,7 +211,7 @@ class DistanceMatrixService {
     
     // Validate API key
     if (!this.apiKey || this.apiKey === 'your_api_key_here') {
-      console.warn('⚠️  Warning: Distance Matrix API key not configured. Route planning will fail.');
+      console.warn('⚠️  Warning: API key not configured. Route planning will fail.');
     }
   }
 
@@ -457,7 +480,7 @@ class DistanceMatrixService {
     
     // Step 2: Batch API requests for cache misses
     if (uncachedPairs.length > 0) {
-      console.log(`📍 Distance Matrix: ${cacheHits} cache hits, ${cacheMisses} API calls needed`);
+      log.info(`Distance Matrix: ${cacheHits} cache hits, ${cacheMisses} API calls needed`);
       
       // Check quota before making API calls
       await this.quotaManager.checkQuota('distance_matrix', uncachedPairs.length);
@@ -550,14 +573,120 @@ class DistanceMatrixService {
   }
 
   /**
-   * Make Distance Matrix API request
+   * Make Distance Matrix API request (with Routes API migration support)
+   * Routes between legacy Distance Matrix API and new Routes API based on feature flag
+   * 
+   * @param {Array} origins - Array of {lat, lng} objects
+   * @param {Array} destinations - Array of {lat, lng} objects
+   * @param {string} mode - Travel mode
+   * @returns {Promise<Object>} API response data (normalized format)
+   */
+  async makeDistanceMatrixRequest(origins, destinations, mode) {
+    if (this.useRoutesApi) {
+      return await this.makeRouteMatrixRequest(origins, destinations, mode);
+    } else {
+      return await this.makeLegacyDistanceMatrixRequest(origins, destinations, mode);
+    }
+  }
+
+  /**
+   * Make Routes API request (NEW - Compute Route Matrix)
+   * 
+   * @param {Array} origins - Array of {lat, lng} objects
+   * @param {Array} destinations - Array of {lat, lng} objects
+   * @param {string} mode - Travel mode
+   * @returns {Promise<Object>} API response data (transformed to legacy format)
+   */
+  async makeRouteMatrixRequest(origins, destinations, mode) {
+    // Validate API key
+    if (!this.apiKey || this.apiKey === 'your_api_key_here') {
+      throw new Error('Routes API key not configured');
+    }
+
+    try {
+      // Transform input to Routes API format
+      const requestBody = {
+        origins: origins.map(o => ({
+          waypoint: {
+            location: {
+              latLng: {
+                latitude: o.lat,
+                longitude: o.lng
+              }
+            }
+          }
+        })),
+        destinations: destinations.map(d => ({
+          waypoint: {
+            location: {
+              latLng: {
+                latitude: d.lat,
+                longitude: d.lng
+              }
+            }
+          }
+        })),
+        travelMode: this.convertTravelMode(mode),
+        routingPreference: this.routingPreference
+      };
+
+      // Log request for debugging (only in development)
+      if (process.env.NODE_ENV === 'development') {
+        log.debug(`Routes API request: ${origins.length} origins × ${destinations.length} destinations (${origins.length * destinations.length} elements)`);
+      }
+
+      // Use rate limiter to schedule the API call
+      const response = await this.limiter.schedule(() =>
+        axios.post(
+          this.routesApiEndpoint,
+          requestBody,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Goog-Api-Key': this.apiKey,
+              'X-Goog-FieldMask': this.routesApiFieldMask
+            },
+            timeout: this.routesApiTimeout
+          }
+        )
+      );
+
+      // Transform response to match legacy Distance Matrix format
+      return this.transformRouteMatrixResponse(response.data, origins.length, destinations.length);
+
+    } catch (error) {
+      // Handle specific error types
+      if (error.response) {
+        const status = error.response.status;
+        const errorData = error.response.data;
+        
+        // Handle common Routes API errors
+        if (status === 429) {
+          throw new Error('Routes API rate limit exceeded (3,000 elements per minute)');
+        } else if (status === 403) {
+          throw new Error('Routes API authentication failed - check API key and restrictions');
+        } else if (status === 400) {
+          throw new Error(`Routes API bad request: ${errorData.error?.message || 'Invalid parameters'}`);
+        }
+        
+        throw new Error(
+          `Routes API error (${status}): ${errorData.error?.message || 'Unknown error'}`
+        );
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Legacy Distance Matrix API request (DEPRECATED - for rollback only)
    * 
    * @param {Array} origins - Array of {lat, lng} objects
    * @param {Array} destinations - Array of {lat, lng} objects
    * @param {string} mode - Travel mode
    * @returns {Promise<Object>} API response data
    */
-  async makeDistanceMatrixRequest(origins, destinations, mode) {
+  async makeLegacyDistanceMatrixRequest(origins, destinations, mode) {
     // Validate API key
     if (!this.apiKey || this.apiKey === 'your_api_key_here') {
       throw new Error('Distance Matrix API key not configured');
@@ -605,6 +734,116 @@ class DistanceMatrixService {
   }
 
   /**
+   * Convert legacy travel mode to Routes API travelMode enum
+   * 
+   * @param {string} mode - Legacy mode (driving, walking, bicycling, transit)
+   * @returns {string} Routes API travelMode (DRIVE, WALK, BICYCLE, TRANSIT)
+   */
+  convertTravelMode(mode) {
+    const modeMap = {
+      'driving': 'DRIVE',
+      'walking': 'WALK',
+      'bicycling': 'BICYCLE',
+      'transit': 'TRANSIT'
+    };
+    return modeMap[mode] || 'DRIVE';
+  }
+
+  /**
+   * Transform Routes API response to match legacy Distance Matrix format
+   * Ensures backward compatibility with existing code
+   * 
+   * @param {Array} elements - Routes API response (flat array with originIndex/destinationIndex)
+   * @param {number} numOrigins - Number of origins
+   * @param {number} numDestinations - Number of destinations
+   * @returns {Object} Legacy Distance Matrix format {status, rows[]}
+   */
+  transformRouteMatrixResponse(elements, numOrigins, numDestinations) {
+    // Create empty matrix structure
+    const matrix = {
+      status: 'OK',
+      rows: Array(numOrigins).fill(null).map(() => ({
+        elements: Array(numDestinations).fill(null)
+      }))
+    };
+
+    // Handle empty response
+    if (!elements || elements.length === 0) {
+      log.warn('Routes API returned empty response');
+      // Fill with ZERO_RESULTS
+      for (let i = 0; i < numOrigins; i++) {
+        for (let j = 0; j < numDestinations; j++) {
+          matrix.rows[i].elements[j] = {
+            status: 'ZERO_RESULTS',
+            distance: { value: 0, text: '0 km' },
+            duration: { value: 0, text: '0 mins' }
+          };
+        }
+      }
+      return matrix;
+    }
+
+    // Populate matrix from flat array
+    for (const element of elements) {
+      const i = element.originIndex;
+      const j = element.destinationIndex;
+
+      // Validate indices
+      if (i === undefined || j === undefined || i >= numOrigins || j >= numDestinations) {
+        log.warn(`Routes API returned invalid indices: originIndex=${i}, destinationIndex=${j}`);
+        continue;
+      }
+
+      // Parse ISO 8601 duration (e.g., "160s" → 160)
+      let durationSeconds = null;
+      if (element.duration) {
+        const match = element.duration.match(/^(\d+)s$/);
+        if (match) {
+          durationSeconds = parseInt(match[1]);
+        } else {
+          log.warn(`Routes API returned unexpected duration format: ${element.duration}`);
+        }
+      }
+
+      // Determine status based on condition
+      const status = element.condition === 'ROUTE_EXISTS' ? 'OK' : 'ZERO_RESULTS';
+
+      // Transform to legacy format
+      matrix.rows[i].elements[j] = {
+        status: status,
+        distance: {
+          value: element.distanceMeters || 0,
+          text: element.distanceMeters ? `${(element.distanceMeters / 1000).toFixed(1)} km` : '0 km'
+        },
+        duration: {
+          value: durationSeconds || 0,
+          text: durationSeconds ? `${Math.round(durationSeconds / 60)} mins` : '0 mins'
+        }
+      };
+
+      // Note: Routes API doesn't provide duration_in_traffic in basic field mask
+      // To get traffic data, would need to use routingPreference: 'TRAFFIC_AWARE' 
+      // and add 'travelAdvisory' to field mask
+    }
+
+    // Validate all elements were filled
+    for (let i = 0; i < numOrigins; i++) {
+      for (let j = 0; j < numDestinations; j++) {
+        if (!matrix.rows[i].elements[j]) {
+          log.warn(`Missing route data for origin ${i}, destination ${j}`);
+          matrix.rows[i].elements[j] = {
+            status: 'ZERO_RESULTS',
+            distance: { value: 0, text: '0 km' },
+            duration: { value: 0, text: '0 mins' }
+          };
+        }
+      }
+    }
+
+    return matrix;
+  }
+
+  /**
    * Build NxN distance matrix for a list of locations
    * 
    * @param {Array} locations - Array of {lat, lng} objects
@@ -628,10 +867,10 @@ class DistanceMatrixService {
       : (process.env.PROGRESSIVE_ROUTING === 'true' || process.env.PROGRESSIVE_ROUTING === undefined);
 
     if (useProgressive) {
-      console.log(`🚀 Progressive routing enabled for ${locations.length} locations`);
+      log.info(`Progressive routing enabled for ${locations.length} locations`);
       return new SparseDistanceMatrix(this, locations, mode);
     } else {
-      console.log(`📊 Full distance matrix mode for ${locations.length} locations (${locations.length * locations.length} total distances)`);
+      log.info(`Full distance matrix mode for ${locations.length} locations (${locations.length * locations.length} total distances)`);
       // Legacy full matrix build
       const result = await this.getDistanceMatrix(locations, locations, mode);
       return result.matrix;

@@ -104,7 +104,7 @@ router.get('/', [
 
         // Build WHERE clause
         let whereConditions = [
-            '(SELECT COUNT(*) FROM election_history WHERE voter_id = v.voter_id AND voted = 1) = 0'
+            '(SELECT COUNT(*) FROM election_history WHERE voter_id = v.voter_id AND voted = 1 AND cycle_id IS NULL) = 0'
         ];
         let params = [];
 

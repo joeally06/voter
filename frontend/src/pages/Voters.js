@@ -17,10 +17,10 @@ export async function renderVoters(container) {
     <!-- Filters -->
     <div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-6">
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <input id="v-search" type="text" placeholder="Search by name..."
+        <input id="v-search" type="text" placeholder="Search by name..." maxlength="100"
           class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none" />
 
-        <input id="v-precinct" type="text" placeholder="Precinct #"
+        <input id="v-precinct" type="text" placeholder="Precinct #" maxlength="3"
           class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none" />
 
         <select id="v-super" class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none">
@@ -42,7 +42,7 @@ export async function renderVoters(container) {
     <div id="v-pagination"></div>
 
     <!-- Detail Modal -->
-    <div id="v-modal" class="fixed inset-0 z-50 hidden bg-black/50 flex items-center justify-center p-4">
+    <div id="v-modal" class="fixed inset-0 z-50 hidden bg-black/50 items-center justify-center p-4">
       <div class="bg-white dark:bg-gray-900 rounded-xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6">
         <div class="flex justify-between items-center mb-4">
           <h3 class="font-bold text-lg">Voter Detail</h3>
@@ -78,14 +78,23 @@ export async function renderVoters(container) {
   // Modal
   const modal     = container.querySelector('#v-modal');
   const modalBody = container.querySelector('#v-modal-body');
-  container.querySelector('#v-modal-close').addEventListener('click', () => modal.classList.add('hidden'));
-  modal.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden'); });
+  container.querySelector('#v-modal-close').addEventListener('click', () => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  });
+  modal.addEventListener('click', e => {
+    if (e.target === modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+  });
 
   container.addEventListener('click', async (e) => {
     const row = e.target.closest('[data-voter-id]');
     if (!row) return;
     const id = row.dataset.voterId;
     modal.classList.remove('hidden');
+    modal.classList.add('flex');
     modalBody.innerHTML = spinner('Loading...');
     try {
       const voter = await fetchVoter(id);

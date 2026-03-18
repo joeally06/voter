@@ -10,7 +10,12 @@
   },
   "description": "Voter Outreach Platform - Frontend",
   "dependencies": {
+    "@googlemaps/markerclusterer": "^2.6.2",
     "@tailwindcss/vite": "^4.1.18",
+    "chart.js": "^4.5.1",
+    "fabric": "^6.9.1",
+    "html2pdf.js": "^0.14.0",
+    "pdfmake": "^0.3.6",
     "tailwindcss": "^4.1.18",
     "vite": "^7.3.1"
   }

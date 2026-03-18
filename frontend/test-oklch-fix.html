@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OKLCH Fix Test</title>
+  <style>
+    /* Simulate Tailwind CSS with OKLCH colors */
+    :root {
+      --color-primary-600: oklch(48.6% 0.215 264.376);
+      --color-red-500: oklch(63.7% 0.237 25.331);
+      --color-blue-600: oklch(54.6% 0.245 262.881);
+    }
+    
+    body {
+      font-family: system-ui, sans-serif;
+      padding: 20px;
+    }
+    
+    .test-box {
+      padding: 20px;
+      margin: 10px 0;
+      border: 2px solid var(--color-primary-600);
+      background-color: oklch(97% 0.014 254.604); /* blue-50 */
+      color: var(--color-red-500);
+    }
+    
+    .result {
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      background: #f5f5f5;
+    }
+    
+    .success {
+      background-color: #d4edda;
+      border-color: #c3e6cb;
+      color: #155724;
+    }
+    
+    .error {
+      background-color: #f8d7da;
+      border-color: #f5c6cb;
+      color: #721c24;
+    }
+  </style>
+</head>
+<body>
+  <h1>OKLCH to RGB Conversion Test</h1>
+  
+  <div class="test-box">
+    <h2>This box uses OKLCH colors</h2>
+    <p>Border, background, and text all use OKLCH color format from CSS variables.</p>
+  </div>
+  
+  <div id="results"></div>
+  
+  <button onclick="testConversion()">Test Stylesheet Conversion</button>
+  <button onclick="testInlineConversion()">Test Inline Style Conversion</button>
+  
+  <script type="module">
+    import { convertCssOklchToRgb, oklchToRgb, ensureRgbColor } from './src/utils/color-converter.js';
+    
+    window.testConversion = function() {
+      const results = document.getElementById('results');
+      results.innerHTML = '<h3>Conversion Tests</h3>';
+      
+      // Test 1: Convert single OKLCH color
+      const test1 = oklchToRgb('oklch(63.7% 0.237 25.331)');
+      addResult(`oklchToRgb('oklch(63.7% 0.237 25.331)')`, test1, test1.startsWith('rgb'));
+      
+      // Test 2: Convert CSS text with OKLCH
+      const cssText = `
+        .test {
+          color: oklch(63.7% 0.237 25.331);
+          background: oklch(97% 0.014 254.604);
+          border-color: oklch(48.6% 0.215 264.376);
+        }
+      `;
+      const converted = convertCssOklchToRgb(cssText);
+      const hasOklch = converted.includes('oklch');
+      const hasRgb = converted.includes('rgb');
+      addResult('convertCssOklchToRgb()', `OKLCH removed: ${!hasOklch}, RGB added: ${hasRgb}`, !hasOklch && hasRgb);
+      
+      // Test 3: Ensure RGB color stays RGB
+      const test3 = ensureRgbColor('rgb(255, 0, 0)');
+      addResult(`ensureRgbColor('rgb(255, 0, 0)')`, test3, test3 === 'rgb(255, 0, 0)');
+      
+      // Test 4: Convert OKLAB (edge case)
+      const test4 = ensureRgbColor('oklab(0.637 0.228 0.089)');
+      addResult(`ensureRgbColor('oklab(0.637 0.228 0.089)')`, test4, test4.startsWith('rgb'));
+    };
+    
+    window.testInlineConversion = function() {
+      const testBox = document.querySelector('.test-box');
+      const computed = getComputedStyle(testBox);
+      
+      const results = document.getElementById('results');
+      results.innerHTML = '<h3>Inline Style Conversion Tests</h3>';
+      
+      // Check what the browser reports for computed styles
+      addResult('Computed borderColor', computed.borderColor, true);
+      addResult('Computed backgroundColor', computed.backgroundColor, true);
+      addResult('Computed color', computed.color, true);
+      
+      // Test conversion
+      const borderRgb = ensureRgbColor(computed.borderColor);
+      const bgRgb = ensureRgbColor(computed.backgroundColor);
+      const colorRgb = ensureRgbColor(computed.color);
+      
+      addResult('Converted borderColor', borderRgb, borderRgb.startsWith('rgb'));
+      addResult('Converted backgroundColor', bgRgb, bgRgb.startsWith('rgb'));
+      addResult('Converted color', colorRgb, colorRgb.startsWith('rgb'));
+    };
+    
+    function addResult(test, result, success) {
+      const results = document.getElementById('results');
+      const div = document.createElement('div');
+      div.className = 'result ' + (success ? 'success' : 'error');
+      div.innerHTML = `
+        <strong>${test}:</strong><br>
+        Result: <code>${result}</code><br>
+        Status: ${success ? '✓ PASS' : '✗ FAIL'}
+      `;
+      results.appendChild(div);
+    }
+  </script>
+</body>
+</html>

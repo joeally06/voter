@@ -6,7 +6,7 @@
   "scripts": {
     "build:frontend": "cd frontend && npm run build",
     "dev:frontend": "cd frontend && npm run dev",
-    "prestart": "npm run build:frontend && powershell -ExecutionPolicy Bypass -File scripts/cleanup-port.ps1",
+    "prestart": "npm run build:frontend && node scripts/validate-build.js && powershell -ExecutionPolicy Bypass -File scripts/cleanup-port.ps1",
     "start": "node backend/server.js",
     "start:backend": "node backend/server.js",
     "dev": "nodemon backend/server.js",

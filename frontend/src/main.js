@@ -3,9 +3,12 @@ import { registerRoutes, startRouter, getCurrentPath, navigateTo } from './route
 import { renderDashboard } from './pages/Dashboard.js';
 import { renderVoters } from './pages/Voters.js';
 import { renderUpload } from './pages/Upload.js';
-import { renderMap } from './pages/MapView.js';
+import { renderMap } from './pages/MapView/MapView.js';
 import { renderAnalytics } from './pages/Analytics.js';
 import { renderNeverVoted } from './pages/NeverVoted.js';
+import { renderArchive } from './pages/Archive.js';
+import { renderMailer } from './pages/Mailer.js';
+import { renderFlyerCreator } from './pages/FlyerCreator.js';
 
 // ── App Shell ──────────────────────────────────────────────────────
 
@@ -16,6 +19,9 @@ const NAV_ITEMS = [
   { path: '/upload',    label: 'Upload',      icon: 'M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12' },
   { path: '/map',       label: 'Map',         icon: 'M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7' },
   { path: '/analytics', label: 'Analytics',   icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+  { path: '/archive',   label: 'Archive',     icon: 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4' },
+  { path: '/mailer',    label: 'Mailer',      icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
+  { path: '/flyer',     label: 'Flyer Creator', icon: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' },
 ];
 
 function createAppShell() {
@@ -142,6 +148,9 @@ registerRoutes([
   { path: '/upload',      title: 'Upload',      render: renderUpload },
   { path: '/map',         title: 'Map',         render: renderMap },
   { path: '/analytics',   title: 'Analytics',   render: renderAnalytics },
+  { path: '/archive',     title: 'Archive',     render: renderArchive },
+  { path: '/mailer',      title: 'Mailing Labels', render: renderMailer },
+  { path: '/flyer',       title: 'Flyer Creator',  render: renderFlyerCreator },
 ]);
 
 startRouter(container);
